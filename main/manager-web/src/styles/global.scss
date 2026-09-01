@@ -1,3 +1,52 @@
+/* YIYI AI 主色：温暖、低刺激，与陪伴玩偶一致。 */
+:root {
+  --yiyi-coral: #e96f58;
+  --yiyi-coral-dark: #ca5643;
+  --yiyi-ink: #352c2a;
+  --yiyi-cream: #f8f3ed;
+  --yiyi-paper: #fffdf9;
+}
+
+body {
+  color: var(--yiyi-ink);
+  background: var(--yiyi-cream);
+}
+
+.el-button--primary {
+  background-color: var(--yiyi-coral) !important;
+  border-color: var(--yiyi-coral) !important;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background-color: var(--yiyi-coral-dark) !important;
+  border-color: var(--yiyi-coral-dark) !important;
+}
+
+.el-button--text,
+.el-tabs__item.is-active,
+.el-tabs__item:hover,
+.el-pagination.is-background .el-pager li:not(.disabled).active {
+  color: var(--yiyi-coral-dark) !important;
+}
+
+.el-pagination.is-background .el-pager li:not(.disabled).active {
+  color: #fff !important;
+  background: var(--yiyi-coral) !important;
+}
+
+.el-switch.is-checked .el-switch__core,
+.el-checkbox__input.is-checked .el-checkbox__inner,
+.el-radio__input.is-checked .el-radio__inner {
+  background-color: var(--yiyi-coral) !important;
+  border-color: var(--yiyi-coral) !important;
+}
+
+.el-checkbox__input.is-checked + .el-checkbox__label,
+.el-radio__input.is-checked + .el-radio__label {
+  color: var(--yiyi-coral-dark) !important;
+}
+
 // 覆盖 autofill 样式
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -36,11 +85,11 @@ select:-webkit-autofill:focus {
     width: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #a1c9fd;
+    background: #d7b7a9;
     border-radius: 3px;
   }
   &::-webkit-scrollbar-track {
-    background: #f0f3fe;
+    background: #f4ece5;
     border-radius: 3px;
   }
 }

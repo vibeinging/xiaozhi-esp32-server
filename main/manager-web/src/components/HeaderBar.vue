@@ -3,8 +3,11 @@
     <div class="header-container">
       <!-- 左侧元素 -->
       <div class="header-left" @click="handleRouter('home')">
-        <img loading="lazy" alt="" src="@/assets/xiaozhi-logo.png" class="logo-img" />
-        <img loading="lazy" alt="" :src="xiaozhiAiIcon" class="brand-img" />
+        <span class="yiyi-logo-mark">AI</span>
+        <span class="yiyi-logo-copy">
+          <strong>YIYI AI</strong>
+          <small>CONTROL CONSOLE</small>
+        </span>
       </div>
 
       <!-- 中间导航菜单 -->
@@ -495,8 +498,10 @@ export default {
 
 <style lang="scss" scoped>
 .header {
-  background: linear-gradient(180deg, #dfeafe, #eff4ff);
-  height: 63px !important;
+  background: rgba(255, 253, 249, 0.96);
+  border-bottom: 1px solid rgba(113, 89, 79, 0.1);
+  box-shadow: 0 8px 30px rgba(88, 60, 50, 0.06);
+  height: 68px !important;
   min-width: 900px;
   overflow: visible;
 }
@@ -506,34 +511,63 @@ export default {
   justify-content: space-between;
   align-items: center;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 18px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 130px;
+  gap: 9px;
+  min-width: 148px;
   cursor: pointer;
 }
 
-.logo-img {
-  width: 42px;
-  height: 42px;
+.yiyi-logo-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding-right: 2px;
+  box-sizing: border-box;
+  border-radius: 13px 13px 13px 5px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  background: linear-gradient(145deg, #ee8068, #d85c48);
+  box-shadow: 0 8px 18px rgba(202, 86, 67, 0.2);
 }
 
-.brand-img {
-  height: 20px;
+.yiyi-logo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.yiyi-logo-copy strong {
+  color: #3a302e;
+  font-family: "STKaiti", "KaiTi", "PingFang SC", serif;
+  font-size: 18px;
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+}
+
+.yiyi-logo-copy small {
+  color: #9a8b85;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
 }
 
 .header-center {
   display: flex;
   align-items: center;
-  gap: 25px;
-  background: white;
+  gap: 12px;
+  background: #f8f3ed;
   border-radius: 30px;
-  box-shadow: 0 0 6px 0px #cfe1fb;
-  padding: 4px;
+  border: 1px solid rgba(113, 89, 79, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  padding: 5px;
 }
 
 .header-right {
@@ -544,14 +578,14 @@ export default {
 }
 
 .equipment-management {
-  padding: 8px 16px;
+  padding: 9px 15px;
   border-radius: 30px;
   display: flex;
   justify-content: center;
   font-size: 16px;
   font-weight: 500;
   gap: 7px;
-  color: #6c79a8;
+  color: #776966;
   margin-left: 1px;
   align-items: center;
   transition: all 0.3s ease;
@@ -562,8 +596,8 @@ export default {
 
 .equipment-management.active-tab {
   color: #fff !important;
-  background: linear-gradient(90deg, #2983fe 0%, #5251fc 100%);
-  box-shadow: 0 1px 8px rgba(41, 131, 254, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(120deg, #ed7b63 0%, #d85a45 100%);
+  box-shadow: 0 8px 18px rgba(204, 82, 61, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   position: relative;
   overflow: hidden;
 }

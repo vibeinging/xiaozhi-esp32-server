@@ -1,129 +1,139 @@
 <template>
   <div class="welcome">
-    <el-container style="height: 100%">
-      <el-header>
-        <div style="
-            display: flex;
-            align-items: center;
-            margin-top: 11px;
-            margin-left: 11px;
-            gap: 10px;
-          ">
-          <img loading="lazy" alt="" src="@/assets/xiaozhi-logo.png" style="width: 42px; height: 42px" />
-          <img loading="lazy" alt="" :src="xiaozhiAiIcon" style="height: 20px" />
-        </div>
-      </el-header>
-      <div class="login-person">
-        <img loading="lazy" alt="" src="@/assets/login/login-person.png" style="width: 100%" />
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <header class="brand-bar">
+      <div class="brand-lockup" aria-label="YIYI AI">
+        <span class="brand-mark">AI</span>
+        <span class="brand-name">YIYI AI</span>
+        <span class="brand-divider"></span>
+        <span class="brand-product">CONTROL CENTER</span>
       </div>
-      <el-main style="position: relative">
-        <div class="login-box" @keyup.enter="login">
-          <div style="
-              display: flex;
-              align-items: center;
-              gap: 20px;
-              margin-bottom: 39px;
-              padding: 0 30px;
-            ">
-            <img loading="lazy" alt="" src="@/assets/login/hi.png" style="width: 34px; height: 34px" />
-            <div class="login-text">{{ $t("login.title") }}</div>
 
-            <div class="login-welcome">
-              {{ $t("login.welcome") }}
-            </div>
+      <el-dropdown trigger="click" class="title-language-dropdown"
+        @visible-change="handleLanguageDropdownVisibleChange">
+        <span class="el-dropdown-link">
+          <i class="el-icon-s-promotion language-icon"></i>
+          <span class="current-language-text">{{ currentLanguageText }}</span>
+          <i class="el-icon-arrow-down" :class="{ 'rotate-down': languageDropdownVisible }"></i>
+        </span>
+        <el-dropdown-menu slot="dropdown">
+          <el-dropdown-item @click.native="changeLanguage('zh_CN')">{{ $t("language.zhCN") }}</el-dropdown-item>
+          <el-dropdown-item @click.native="changeLanguage('zh_TW')">{{ $t("language.zhTW") }}</el-dropdown-item>
+          <el-dropdown-item @click.native="changeLanguage('en')">{{ $t("language.en") }}</el-dropdown-item>
+          <el-dropdown-item @click.native="changeLanguage('de')">{{ $t("language.de") }}</el-dropdown-item>
+          <el-dropdown-item @click.native="changeLanguage('vi')">{{ $t("language.vi") }}</el-dropdown-item>
+          <el-dropdown-item @click.native="changeLanguage('pt_BR')">{{ $t("language.ptBR") }}</el-dropdown-item>
+        </el-dropdown-menu>
+      </el-dropdown>
+    </header>
 
-            <!-- 语言切换下拉菜单 -->
-            <el-dropdown trigger="click" class="title-language-dropdown"
-              @visible-change="handleLanguageDropdownVisibleChange">
-              <span class="el-dropdown-link">
-                <span class="current-language-text">{{ currentLanguageText }}</span>
-                <i class="el-icon-arrow-down el-icon--right" :class="{ 'rotate-down': languageDropdownVisible }"></i>
-              </span>
-              <el-dropdown-menu slot="dropdown">
-                <el-dropdown-item @click.native="changeLanguage('zh_CN')">
-                  {{ $t("language.zhCN") }}
-                </el-dropdown-item>
-                <el-dropdown-item @click.native="changeLanguage('zh_TW')">
-                  {{ $t("language.zhTW") }}
-                </el-dropdown-item>
-                <el-dropdown-item @click.native="changeLanguage('en')">
-                  {{ $t("language.en") }}
-                </el-dropdown-item>
-                <el-dropdown-item @click.native="changeLanguage('de')">
-                  {{ $t("language.de") }}
-                </el-dropdown-item>
-                <el-dropdown-item @click.native="changeLanguage('vi')">
-                  {{ $t("language.vi") }}
-                </el-dropdown-item>
-                <el-dropdown-item @click.native="changeLanguage('pt_BR')">
-                  {{ $t("language.ptBR") }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </el-dropdown>
+    <main class="auth-layout">
+      <section class="story-panel" aria-labelledby="brand-story-title">
+        <div class="story-copy">
+          <div class="eyebrow"><span></span>{{ brandCopy.eyebrow }}</div>
+          <h1 id="brand-story-title">{{ brandCopy.title }}</h1>
+          <p>{{ brandCopy.subtitle }}</p>
+          <div class="feature-row">
+            <span><i class="el-icon-microphone"></i>{{ brandCopy.featureOne }}</span>
+            <span><i class="el-icon-chat-dot-round"></i>{{ brandCopy.featureTwo }}</span>
+            <span><i class="el-icon-s-tools"></i>{{ brandCopy.featureThree }}</span>
           </div>
-          <div style="padding: 0 30px">
-            <!-- 用户名登录 -->
-            <template v-if="!isMobileLogin">
-              <div class="input-box">
-                <img loading="lazy" alt="" class="input-icon" src="@/assets/login/username.png" />
-                <el-input v-model="form.username" :placeholder="$t('login.usernamePlaceholder')" />
-              </div>
-            </template>
+        </div>
 
-            <!-- 手机号登录 -->
-            <template v-else>
-              <div class="input-box">
-                <div style="display: flex; align-items: center; width: 100%">
-                  <el-select v-model="form.areaCode" style="width: 220px; margin-right: 10px">
-                    <el-option v-for="item in mobileAreaList" :key="item.key" :label="`${item.name} (${item.key})`"
-                      :value="item.key" />
-                  </el-select>
-                  <el-input v-model="form.mobile" :placeholder="$t('login.mobilePlaceholder')" />
-                </div>
-              </div>
-            </template>
+        <div class="companion-scene" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="orbit-dot dot-one"></div>
+          <div class="orbit-dot dot-two"></div>
+          <div class="plush">
+            <div class="plush-ear plush-ear-left"></div>
+            <div class="plush-ear plush-ear-right"></div>
+            <div class="plush-face">
+              <span class="plush-eye plush-eye-left"></span>
+              <span class="plush-eye plush-eye-right"></span>
+              <span class="plush-nose"></span>
+              <span class="plush-smile"></span>
+              <span class="plush-blush plush-blush-left"></span>
+              <span class="plush-blush plush-blush-right"></span>
+            </div>
+            <div class="voice-wave wave-one"></div>
+            <div class="voice-wave wave-two"></div>
+            <div class="voice-wave wave-three"></div>
+          </div>
+          <div class="scene-note">
+            <strong>{{ brandCopy.noteTitle }}</strong>
+            <span>{{ brandCopy.noteBody }}</span>
+          </div>
+        </div>
+      </section>
 
+      <section class="login-box" @keyup.enter="login">
+        <div class="login-heading">
+          <div>
+            <span class="console-label">{{ brandCopy.console }}</span>
+            <h2>{{ brandCopy.welcome }}</h2>
+            <p>{{ brandCopy.loginHint }}</p>
+          </div>
+          <div class="security-badge" :title="brandCopy.secure">
+            <i class="el-icon-lock"></i>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <template v-if="!isMobileLogin">
+            <label class="field-label">{{ brandCopy.usernameLabel }}</label>
             <div class="input-box">
-              <img loading="lazy" alt="" class="input-icon" src="@/assets/login/password.png" />
-              <el-input v-model="form.password" :placeholder="$t('login.passwordPlaceholder')" type="password"
-                show-password />
+              <i class="el-icon-user input-glyph"></i>
+              <el-input v-model="form.username" :placeholder="$t('login.usernamePlaceholder')" autocomplete="username" />
             </div>
-            <div style="
-                display: flex;
-                align-items: center;
-                margin-top: 20px;
-                width: 100%;
-                gap: 10px;
-              ">
-              <div class="input-box" style="width: calc(100% - 130px); margin-top: 0">
-                <img loading="lazy" alt="" class="input-icon" src="@/assets/login/shield.png" />
-                <el-input v-model="form.captcha" :placeholder="$t('login.captchaPlaceholder')" style="flex: 1" />
-              </div>
-              <img loading="lazy" v-if="captchaUrl" :src="captchaUrl" alt="验证码"
-                style="width: 150px; height: 40px; cursor: pointer" @click="fetchCaptcha" />
-            </div>
-            <div style="
-                font-weight: 400;
-                font-size: 14px;
-                text-align: left;
-                color: #5778ff;
-                display: flex;
-                justify-content: space-between;
-                margin-top: 20px;
-              ">
-              <div v-if="allowUserRegister" style="cursor: pointer" @click="goToRegister">
-                {{ $t("login.register") }}
-              </div>
-              <div style="cursor: pointer" @click="goToForgetPassword" v-if="enableMobileRegister">
-                {{ $t("login.forgetPassword") }}
-              </div>
-            </div>
-          </div>
-          <div class="login-btn" @click="login">{{ $t("login.login") }}</div>
+          </template>
 
-          <!-- 登录方式切换按钮 -->
+          <template v-else>
+            <label class="field-label">{{ brandCopy.mobileLabel }}</label>
+            <div class="input-box mobile-input-box">
+              <el-select v-model="form.areaCode" class="area-code-select">
+                <el-option v-for="item in mobileAreaList" :key="item.key" :label="`${item.name} (${item.key})`"
+                  :value="item.key" />
+              </el-select>
+              <el-input v-model="form.mobile" :placeholder="$t('login.mobilePlaceholder')" />
+            </div>
+          </template>
+
+          <label class="field-label">{{ brandCopy.passwordLabel }}</label>
+          <div class="input-box">
+            <i class="el-icon-lock input-glyph"></i>
+            <el-input v-model="form.password" :placeholder="$t('login.passwordPlaceholder')" type="password"
+              autocomplete="current-password" show-password />
+          </div>
+
+          <label class="field-label">{{ brandCopy.captchaLabel }}</label>
+          <div class="captcha-row">
+            <div class="input-box captcha-input">
+              <i class="el-icon-key input-glyph"></i>
+              <el-input v-model="form.captcha" :placeholder="$t('login.captchaPlaceholder')" />
+            </div>
+            <button v-if="captchaUrl" type="button" class="captcha-button" @click="fetchCaptcha"
+              :aria-label="brandCopy.refreshCaptcha">
+              <img loading="lazy" :src="captchaUrl" alt="验证码" />
+            </button>
+          </div>
+
+          <div class="form-links">
+            <button v-if="allowUserRegister" type="button" @click="goToRegister">{{ $t("login.register") }}</button>
+            <button v-if="enableMobileRegister" type="button" @click="goToForgetPassword">
+              {{ $t("login.forgetPassword") }}
+            </button>
+          </div>
+
+          <button type="button" class="login-btn" @click="login">
+            <span>{{ $t("login.login") }}</span>
+            <i class="el-icon-right"></i>
+          </button>
+
           <div class="login-type-container" v-if="enableMobileRegister">
-            <div style="display: flex; gap: 10px">
+            <div class="login-type-switch">
               <el-tooltip :content="$t('login.mobileLogin')" placement="bottom">
                 <el-button :type="isMobileLogin ? 'primary' : 'default'" icon="el-icon-mobile" circle
                   @click="switchLoginType('mobile')"></el-button>
@@ -134,28 +144,27 @@
               </el-tooltip>
             </div>
           </div>
-          <div style="font-size: 14px; color: #979db1">
+
+          <div class="agreement">
             {{ $t("login.agreeTo") }}
-            <div style="display: inline-block; color: #5778ff; cursor: pointer" @click="openPage('/user-agreement.html')">
-              {{ $t("login.userAgreement") }}
-            </div>
+            <button type="button" @click="openPage('/user-agreement.html')">{{ $t("login.userAgreement") }}</button>
             {{ $t("login.and") }}
-            <div style="display: inline-block; color: #5778ff; cursor: pointer" @click="openPage('/privacy-policy.html')">
-              {{ $t("login.privacyPolicy") }}
-            </div>
+            <button type="button" @click="openPage('/privacy-policy.html')">{{ $t("login.privacyPolicy") }}</button>
           </div>
         </div>
-      </el-main>
-      <el-footer>
-        <version-footer />
-      </el-footer>
-    </el-container>
+      </section>
+    </main>
+
+    <footer class="yiyi-footer">
+      <span>YIYI AI</span>
+      <span class="footer-dot"></span>
+      <span>{{ brandCopy.footer }}</span>
+    </footer>
   </div>
 </template>
 
 <script>
 import Api from "@/apis/api";
-import VersionFooter from "@/components/VersionFooter.vue";
 import i18n, { changeLanguage } from "@/i18n";
 import { getUUID, goToPage, showDanger, showSuccess, sm2Encrypt, validateMobile } from "@/utils";
 import { mapState } from "vuex";
@@ -163,9 +172,7 @@ import featureManager from "@/utils/featureManager";
 
 export default {
   name: "login",
-  components: {
-    VersionFooter,
-  },
+  components: {},
   computed: {
     ...mapState({
       allowUserRegister: (state) => state.pubConfig.allowUserRegister,
@@ -197,23 +204,50 @@ export default {
           return this.$t("language.zhCN");
       }
     },
-    // 根据当前语言获取对应的xiaozhi-ai图标
-    xiaozhiAiIcon() {
-      const currentLang = this.currentLanguage;
-      switch (currentLang) {
-        case "zh_CN":
-          return require("@/assets/xiaozhi-ai.png");
-        case "zh_TW":
-          return require("@/assets/xiaozhi-ai_zh_TW.png");
-        case "en":
-          return require("@/assets/xiaozhi-ai_en.png");
-        case "de":
-          return require("@/assets/xiaozhi-ai_de.png");
-        case "vi":
-          return require("@/assets/xiaozhi-ai_vi.png");
-        default:
-          return require("@/assets/xiaozhi-ai.png");
-      }
+    brandCopy() {
+      const copy = {
+        zh_CN: {
+          eyebrow: "AI 陪伴玩偶控制中心",
+          title: "让每一次回应，都更懂陪伴。",
+          subtitle: "在这里管理声音、记忆、模型与设备，让玩偶保持温暖、稳定的表达。",
+          featureOne: "语音",
+          featureTwo: "记忆",
+          featureThree: "设备",
+          noteTitle: "正在倾听",
+          noteBody: "一个更懂陪伴的智能玩偶",
+          console: "管理控制台",
+          welcome: "欢迎回来",
+          loginHint: "登录后继续管理设备与服务",
+          usernameLabel: "管理员账号",
+          mobileLabel: "手机号",
+          passwordLabel: "登录密码",
+          captchaLabel: "安全验证",
+          refreshCaptcha: "点击刷新验证码",
+          secure: "HTTPS 安全连接",
+          footer: "让科技更有温度",
+        },
+        zh_TW: {
+          eyebrow: "AI 陪伴玩偶控制中心",
+          title: "讓每一次回應，都更懂陪伴。",
+          subtitle: "在這裡管理聲音、記憶、模型與設備。",
+          featureOne: "語音", featureTwo: "記憶", featureThree: "設備",
+          noteTitle: "正在傾聽", noteBody: "一個更懂陪伴的智能玩偶",
+          console: "管理控制台", welcome: "歡迎回來", loginHint: "登入後繼續管理設備與服務",
+          usernameLabel: "管理員帳號", mobileLabel: "手機號", passwordLabel: "登入密碼", captchaLabel: "安全驗證",
+          refreshCaptcha: "點擊更新驗證碼", secure: "HTTPS 安全連線", footer: "讓科技更有溫度",
+        },
+        en: {
+          eyebrow: "AI COMPANION CONTROL CENTER",
+          title: "Make every response feel more caring.",
+          subtitle: "Manage YIYI AI voices, memory, models and devices in one calm, secure place.",
+          featureOne: "Voice", featureTwo: "Memory", featureThree: "Devices",
+          noteTitle: "Listening", noteBody: "A companion designed to understand",
+          console: "ADMIN CONSOLE", welcome: "Welcome back", loginHint: "Sign in to manage your YIYI AI",
+          usernameLabel: "Admin account", mobileLabel: "Mobile number", passwordLabel: "Password", captchaLabel: "Security check",
+          refreshCaptcha: "Refresh captcha", secure: "Secure HTTPS connection", footer: "Technology with a warmer touch",
+        },
+      };
+      return copy[this.currentLanguage] || copy.en;
     },
   },
   data() {
@@ -396,24 +430,41 @@ export default {
 @import "./auth.scss";
 
 .login-type-container {
-  margin: 10px 20px;
+  margin: 2px 0 12px;
   display: flex;
   justify-content: center;
 }
 
+.login-type-switch {
+  display: flex;
+  gap: 10px;
+}
+
 .title-language-dropdown {
-  margin-left: auto;
+  position: relative;
+  z-index: 6;
+  cursor: pointer;
+}
+
+.el-dropdown-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid rgba(113, 89, 79, 0.12);
+  border-radius: 999px;
+  color: #6f625e;
+  background: rgba(255, 253, 249, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+.language-icon {
+  color: #d76752;
 }
 
 .current-language-text {
-  margin-left: 4px;
-  margin-right: 4px;
   font-size: 12px;
-  color: #3d4566;
-}
-
-.language-dropdown {
-  margin-left: auto;
+  color: #5e514d;
 }
 
 .rotate-down {
@@ -426,18 +477,18 @@ export default {
 }
 
 :deep(.el-button--primary) {
-  background-color: #5778ff;
-  border-color: #5778ff;
+  background-color: #e96f58;
+  border-color: #e96f58;
 
   &:hover,
   &:focus {
-    background-color: #4a6ae8;
-    border-color: #4a6ae8;
+    background-color: #d85a45;
+    border-color: #d85a45;
   }
 
   &:active {
-    background-color: #3d5cd6;
-    border-color: #3d5cd6;
+    background-color: #c44d3b;
+    border-color: #c44d3b;
   }
 }
 </style>
