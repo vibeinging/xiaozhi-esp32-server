@@ -10,6 +10,11 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
+from core.safety.memory_filter import (
+    exclude_reason,
+    redact_for_long_term_memory,
+)
+
 from ..base import MemoryProviderBase, logger
 
 TAG = __name__
@@ -73,6 +78,8 @@ class MemoryProvider(MemoryProviderBase):
         # searchable, so the safe no-LLM default must not create endless retries.
         self.compact_on_save = _as_bool(config.get("compact_on_save"), False)
         self.include_device_id = _as_bool(config.get("include_device_id"), False)
+        # 对接合同 §9：儿童长期记忆写入过滤，默认必须开启。
+        self.write_filter_enabled = _as_bool(config.get("write_filter"), True)
         queue_path = os.path.expandvars(
             str(config.get("queue_path", "data/memme-retry.sqlite3"))
         )
@@ -304,6 +311,7 @@ class MemoryProvider(MemoryProviderBase):
 
     def _events_payload(self, msgs, session_id: str) -> Optional[Dict[str, Any]]:
         messages = []
+        excluded = {}
         for message in msgs:
             if getattr(message, "role", None) not in {"user", "assistant"}:
                 continue
@@ -314,6 +322,12 @@ class MemoryProvider(MemoryProviderBase):
             if not message_id:
                 logger.bind(tag=TAG).warning("MemMe 忽略缺少稳定 ID 的消息")
                 continue
+            if self.write_filter_enabled:
+                reason = exclude_reason(content)
+                if reason is not None:
+                    excluded[reason] = excluded.get(reason, 0) + 1
+                    continue
+                content = redact_for_long_term_memory(content)
             messages.append(
                 {
                     "event_id": f"{session_id}:{message_id}",
@@ -321,6 +335,10 @@ class MemoryProvider(MemoryProviderBase):
                     "content": content,
                 }
             )
+        if excluded:
+            # 只记类别与数量，不落任何原文（合同 §8：错误正文不入队同理）
+            summary = ", ".join(f"{k}×{v}" for k, v in sorted(excluded.items()))
+            logger.bind(tag=TAG).info(f"MemMe 写入过滤排除消息：{summary}")
         if not messages:
             return None
 
@@ -411,6 +429,9 @@ class MemoryProvider(MemoryProviderBase):
         search_query = _message_text(query)
         if search_query is None:
             return ""
+        # 对接合同 §7.1：召回查询使用脱敏文字，不把原始 PII 发给 MemMe
+        if self.write_filter_enabled:
+            search_query = redact_for_long_term_memory(search_query)
         payload = {
             "query": search_query,
             "user_id": self.user_id,
