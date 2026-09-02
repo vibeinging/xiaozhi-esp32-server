@@ -1165,7 +1165,7 @@ TTS:
     api_key: 你的阿里云百炼API密钥
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     model: qwen3-tts-flash-realtime
-    voice: Momo
+    voice: Serena
     language_type: Chinese
     volume: 50
     speech_rate: 1.0
