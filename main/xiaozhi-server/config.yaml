@@ -344,6 +344,28 @@ Memory:
       #   db_name: powermem
       #   collection_name: memories  # 默认表名，如创建维度错误请删除此表或更改名称
       #   embedding_model_dims: 1024  # 嵌入向量维度，注意跟使用模型适配，以智普为例：embedding-2的维度是1024，embedding-3的维度是2048
+  memme:
+    # 本地 MemMe 长期记忆。启用时把 selected_module.Memory 改为 memme。
+    type: memme
+    base_url: http://127.0.0.1:8080
+    # 建议通过 MEMME_API_KEY 环境变量传入，不要把真实 Key 写进配置文件。
+    api_key: ${MEMME_API_KEY}
+    # 必填的稳定身份。不能使用设备 MAC 或一次 WebSocket 会话 ID。
+    user_id: ""
+    agent_id: ""
+    app_id: xiaozhi
+    queue_path: data/memme-retry.sqlite3
+    request_timeout_seconds: 3
+    retry_batch_size: 2
+    retry_base_seconds: 10
+    retry_max_seconds: 3600
+    queue_max_jobs: 10000
+    queue_max_bytes: 268435456
+    recall_limit: 5
+    recall_max_chars: 4000
+    compact_on_save: true
+    # 默认不向记忆库传设备 MAC。
+    include_device_id: false
   nomem:
     # 不想使用记忆功能，可以使用nomem
     type: nomem

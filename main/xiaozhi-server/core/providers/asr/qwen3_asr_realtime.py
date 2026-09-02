@@ -157,7 +157,9 @@ class ASRProvider(ASRProviderBase):
                         if part
                     )
                     if partial:
-                        logger.bind(tag=TAG).debug(f"ASR 实时文字: {partial}")
+                        logger.bind(tag=TAG).debug(
+                            f"ASR 实时文字长度: {len(partial)}"
+                        )
                 elif (
                     event_type
                     == "conversation.item.input_audio_transcription.completed"

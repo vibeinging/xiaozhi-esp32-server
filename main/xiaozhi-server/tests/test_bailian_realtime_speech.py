@@ -117,6 +117,16 @@ class BailianRealtimeTtsTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(provider._should_append_cat_meow())
 
+    async def test_cat_meow_is_skipped_for_fixed_child_safety_handoff(self):
+        provider = self.make_provider()
+        provider.cat_meow_enabled = True
+        provider.cat_meow_probability = 1.0
+        provider._random = lambda: 0.0
+        provider._user_text = "[儿童安全事件:abuse_or_bullying]"
+        provider._response_text = "这不是你的错，请现在就告诉可信任的大人。"
+
+        self.assertFalse(provider._should_append_cat_meow())
+
     async def test_existing_meow_resets_counter_without_duplicate(self):
         provider = self.make_provider()
         provider.cat_meow_enabled = True

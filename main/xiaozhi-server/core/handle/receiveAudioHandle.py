@@ -1,15 +1,18 @@
 import time
 import json
 import asyncio
+import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.connection import ConnectionHandler
 from core.utils.util import audio_to_data
 from core.handle.abortHandle import handleAbortMessage
-from core.handle.intentHandler import handle_user_intent
+from core.handle.intentHandler import handle_user_intent, speak_txt
 from core.utils.output_counter import check_device_output_limit
 from core.handle.sendAudioHandle import send_stt_message, SentenceType
+from core.utils import textUtils
+from core.utils.dialogue import Message
 
 TAG = __name__
 
@@ -44,6 +47,7 @@ async def startToChat(conn: "ConnectionHandler", text):
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     actual_text = text
+    safety_text = text
 
     try:
         # 尝试解析JSON格式的输入
@@ -52,7 +56,8 @@ async def startToChat(conn: "ConnectionHandler", text):
             if "speaker" in data and "content" in data:
                 speaker_name = data["speaker"]
                 actual_content = data["content"]
-                conn.logger.bind(tag=TAG).info(f"解析到说话人信息: {speaker_name}")
+                safety_text = actual_content
+                conn.logger.bind(tag=TAG).info("解析到已识别说话人信息")
 
                 # 仅在该说话人首次出现时保留 {"speaker":...} JSON，让模型自然称呼一次；
                 # 后续轮降为纯文本，避免每轮重复出现名字诱导模型反复称呼
@@ -86,6 +91,32 @@ async def startToChat(conn: "ConnectionHandler", text):
     # manual 模式下不打断正在播放的内容
     if conn.client_is_speaking and conn.client_listen_mode != "manual":
         await handleAbortMessage(conn)
+
+    # 儿童模式的高风险输入在任何工具和 LLM 之前处理。
+    safety_decision = conn.content_safety.evaluate_input(safety_text)
+    if not safety_decision.allowed:
+        conn.client_abort = False
+        conn.current_user_query = f"[儿童安全事件:{safety_decision.category}]"
+        conn.sentence_id = uuid.uuid4().hex
+        await send_stt_message(
+            conn, safety_decision.display_text or "[内容已安全处理]"
+        )
+        conn.dialogue.put(
+            Message(
+                role="user",
+                content=f"[儿童安全事件：{safety_decision.category}，原文未保留]",
+            )
+        )
+        response = safety_decision.response
+        if response:
+            if (conn.features or {}).get("emoji", True):
+                await textUtils.get_emotion(conn, response)
+            speak_txt(conn, response)
+        conn.logger.bind(tag=TAG).warning(
+            f"儿童内容安全已处理输入: action={safety_decision.action.value}, "
+            f"category={safety_decision.category}"
+        )
+        return
 
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)

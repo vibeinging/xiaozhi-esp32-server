@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 from ..base import IntentProviderBase
 from plugins_func.functions.play_music import initialize_music_handler
 from config.logger import setup_logging
+from core.safety import summarize_text_for_log
 from core.utils.util import get_system_error_response
 import re
 import json
@@ -192,7 +193,9 @@ class IntentProvider(IntentProviderBase):
                 hass_prompt += device + "\n"
             prompt_music += hass_prompt
 
-        logger.bind(tag=TAG).debug(f"User prompt: {prompt_music}")
+        logger.bind(tag=TAG).debug(
+            f"意图识别提示词已生成: chars={len(prompt_music)}"
+        )
 
         # 构建用户对话历史的提示
         msgStr = ""
@@ -243,7 +246,8 @@ class IntentProvider(IntentProviderBase):
         # 记录总处理时间
         total_time = time.time() - total_start_time
         logger.bind(tag=TAG).debug(
-            f"【意图识别性能】模型: {model_info}, 总耗时: {total_time:.4f}秒, LLM调用: {llm_time:.4f}秒, 查询: '{text[:20]}...'"
+            f"【意图识别性能】模型: {model_info}, 总耗时: {total_time:.4f}秒, "
+            f"LLM调用: {llm_time:.4f}秒, 查询: {summarize_text_for_log(text)}"
         )
 
         # 尝试解析为JSON

@@ -18,6 +18,8 @@ from core.utils.tts import MarkdownCleaner, convert_percentage_to_range
 from core.utils.output_counter import add_device_output
 from core.handle.reportHandle import enqueue_tts_report
 from core.handle.sendAudioHandle import sendAudioMessage
+from core.safety.policy import ChildContentSafetyPolicy, summarize_text_for_log
+from core.safety.tts_queue import SafetyAwareTTSQueue
 from core.utils.util import audio_bytes_to_data_stream, audio_to_data_stream
 from core.providers.tts.dto.dto import (
     TTSMessageDTO,
@@ -38,7 +40,8 @@ class TTSProviderBase(ABC):
         self.audio_file_type = "wav"
         self.output_file = config.get("output_dir", "tmp/")
         self.tts_timeout = int(config.get("tts_timeout", 15))
-        self.tts_text_queue = queue.Queue()
+        self.content_safety = ChildContentSafetyPolicy(enabled=False)
+        self.tts_text_queue = SafetyAwareTTSQueue(self.content_safety)
         self.tts_audio_queue = queue.Queue()
         self.tts_audio_first_sentence = True
         self.before_stop_play_files = []
@@ -149,16 +152,19 @@ class TTSProviderBase(ABC):
                         max_repeat_time -= 1
                 except Exception as e:
                     logger.bind(tag=TAG).warning(
-                        f"语音生成失败{5 - max_repeat_time + 1}次: {original_text}，错误: {e}"
+                        f"语音生成失败{5 - max_repeat_time + 1}次: "
+                        f"{summarize_text_for_log(original_text)}，错误: {e}"
                     )
                     max_repeat_time -= 1
             if max_repeat_time > 0:
                 logger.bind(tag=TAG).info(
-                    f"语音生成成功: {original_text}，重试{5 - max_repeat_time}次"
+                    f"语音生成成功: {summarize_text_for_log(original_text)}，"
+                    f"重试{5 - max_repeat_time}次"
                 )
             else:
                 logger.bind(tag=TAG).error(
-                    f"语音生成失败: {original_text}，请检查网络或服务是否正常"
+                    f"语音生成失败: {summarize_text_for_log(original_text)}，"
+                    "请检查网络或服务是否正常"
                 )
             return None
         else:
@@ -169,7 +175,8 @@ class TTSProviderBase(ABC):
                         asyncio.run(self.text_to_speak(text, tmp_file))
                     except Exception as e:
                         logger.bind(tag=TAG).warning(
-                            f"语音生成失败{5 - max_repeat_time + 1}次: {original_text}，错误: {e}"
+                            f"语音生成失败{5 - max_repeat_time + 1}次: "
+                            f"{summarize_text_for_log(original_text)}，错误: {e}"
                         )
                         # 未执行成功，删除文件
                         if os.path.exists(tmp_file):
@@ -178,11 +185,13 @@ class TTSProviderBase(ABC):
 
                 if max_repeat_time > 0:
                     logger.bind(tag=TAG).info(
-                        f"语音生成成功: {original_text}:{tmp_file}，重试{5 - max_repeat_time}次"
+                        f"语音生成成功: {summarize_text_for_log(original_text)}, "
+                        f"file={tmp_file}，重试{5 - max_repeat_time}次"
                     )
                 else:
                     logger.bind(tag=TAG).error(
-                        f"语音生成失败: {original_text}，请检查网络或服务是否正常"
+                        f"语音生成失败: {summarize_text_for_log(original_text)}，"
+                        "请检查网络或服务是否正常"
                     )
                 self.tts_audio_queue.put((SentenceType.FIRST, None, original_text, getattr(self, 'current_sentence_id', None)))
                 self._process_audio_file_stream(tmp_file, callback=opus_handler)
@@ -216,16 +225,19 @@ class TTSProviderBase(ABC):
                         max_repeat_time -= 1
                 except Exception as e:
                     logger.bind(tag=TAG).warning(
-                        f"语音生成失败{5 - max_repeat_time + 1}次: {original_text}，错误: {e}"
+                        f"语音生成失败{5 - max_repeat_time + 1}次: "
+                        f"{summarize_text_for_log(original_text)}，错误: {e}"
                     )
                     max_repeat_time -= 1
             if max_repeat_time > 0:
                 logger.bind(tag=TAG).info(
-                    f"语音生成成功: {original_text}，重试{5 - max_repeat_time}次"
+                    f"语音生成成功: {summarize_text_for_log(original_text)}，"
+                    f"重试{5 - max_repeat_time}次"
                 )
             else:
                 logger.bind(tag=TAG).error(
-                    f"语音生成失败: {original_text}，请检查网络或服务是否正常"
+                    f"语音生成失败: {summarize_text_for_log(original_text)}，"
+                    "请检查网络或服务是否正常"
                 )
             return None
         else:
@@ -236,7 +248,8 @@ class TTSProviderBase(ABC):
                         asyncio.run(self.text_to_speak(text, tmp_file))
                     except Exception as e:
                         logger.bind(tag=TAG).warning(
-                            f"语音生成失败{5 - max_repeat_time + 1}次: {original_text}，错误: {e}"
+                            f"语音生成失败{5 - max_repeat_time + 1}次: "
+                            f"{summarize_text_for_log(original_text)}，错误: {e}"
                         )
                         # 未执行成功，删除文件
                         if os.path.exists(tmp_file):
@@ -245,11 +258,13 @@ class TTSProviderBase(ABC):
 
                 if max_repeat_time > 0:
                     logger.bind(tag=TAG).info(
-                        f"语音生成成功: {original_text}:{tmp_file}，重试{5 - max_repeat_time}次"
+                        f"语音生成成功: {summarize_text_for_log(original_text)}, "
+                        f"file={tmp_file}，重试{5 - max_repeat_time}次"
                     )
                 else:
                     logger.bind(tag=TAG).error(
-                        f"语音生成失败: {original_text}，请检查网络或服务是否正常"
+                        f"语音生成失败: {summarize_text_for_log(original_text)}，"
+                        "请检查网络或服务是否正常"
                     )
 
                 return tmp_file
@@ -330,11 +345,18 @@ class TTSProviderBase(ABC):
             text: 要存储的文本
         """
         if sentence_id and text:
-            self._sentence_text_map[sentence_id] = text
+            safe_text = self.content_safety.guard_assistant_text(text)
+            self._sentence_text_map[sentence_id] = safe_text
             # 只保留最近 5 个，防止内存泄漏
             if len(self._sentence_text_map) > 5:
                 oldest = next(iter(self._sentence_text_map))
                 del self._sentence_text_map[oldest]
+
+    def set_content_safety(self, policy):
+        """为当前设备连接设置不可被角色切换关闭的内容安全策略。"""
+
+        self.content_safety = policy or ChildContentSafetyPolicy(enabled=False)
+        self.tts_text_queue.set_policy(self.content_safety)
 
     def get_tts_text(self, sentence_id):
         """获取指定 sentence_id 对应的文本
@@ -466,7 +488,9 @@ class TTSProviderBase(ABC):
                     add_device_output(self.conn.headers.get("device-id"), len(text))
 
             except Exception as e:
-                logger.bind(tag=TAG).error(f"audio_play_priority_thread: {text} {e}")
+                logger.bind(tag=TAG).error(
+                    f"audio_play_priority_thread: {summarize_text_for_log(text)} {e}"
+                )
 
     async def start_session(self, session_id):
         pass

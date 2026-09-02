@@ -14,6 +14,7 @@ from .device_iot import DeviceIoTExecutor
 from .device_mcp import DeviceMCPExecutor
 from .mcp_endpoint import MCPEndpointExecutor
 from core.handle.sendAudioHandle import send_display_message
+from core.safety.policy import PARENT_REQUIRED_RESPONSE
 
 
 class UnifiedToolHandler:
@@ -119,11 +120,19 @@ class UnifiedToolHandler:
 
     def get_functions(self) -> List[Dict[str, Any]]:
         """获取所有工具的函数描述"""
-        return self.tool_manager.get_function_descriptions()
+        functions = self.tool_manager.get_function_descriptions()
+        return self.conn.content_safety.filter_function_descriptions(functions)
 
     def current_support_functions(self) -> List[str]:
         """获取当前支持的函数名称列表"""
-        func_names = self.tool_manager.get_supported_tool_names()
+        if self.conn.content_safety.enabled:
+            func_names = [
+                (item.get("function") or {}).get("name") or item.get("name")
+                for item in self.get_functions()
+            ]
+            func_names = [name for name in func_names if name]
+        else:
+            func_names = self.tool_manager.get_supported_tool_names()
         self.logger.info(f"当前支持的函数列表: {func_names}")
         return func_names
 
@@ -145,6 +154,14 @@ class UnifiedToolHandler:
             if "function_calls" in function_call_data:
                 responses = []
                 for call in function_call_data["function_calls"]:
+                    if not self.conn.content_safety.can_execute_tool(call["name"]):
+                        responses.append(
+                            ActionResponse(
+                                action=Action.RESPONSE,
+                                response=PARENT_REQUIRED_RESPONSE,
+                            )
+                        )
+                        continue
                     result = await self.tool_manager.execute_tool(
                         call["name"], call.get("arguments", {})
                     )
@@ -155,18 +172,32 @@ class UnifiedToolHandler:
             function_name = function_call_data["name"]
             arguments = function_call_data.get("arguments", {})
 
+            if not self.conn.content_safety.can_execute_tool(function_name):
+                self.logger.warning(
+                    f"儿童内容安全已阻止工具: function_name={function_name}"
+                )
+                return ActionResponse(
+                    action=Action.RESPONSE,
+                    response=PARENT_REQUIRED_RESPONSE,
+                )
+
             # 如果arguments是字符串，尝试解析为JSON
             if isinstance(arguments, str):
                 try:
                     arguments = json.loads(arguments) if arguments else {}
                 except json.JSONDecodeError:
-                    self.logger.error(f"无法解析函数参数: {arguments}")
+                    self.logger.error(
+                        f"无法解析函数参数: function_name={function_name}"
+                    )
                     return ActionResponse(
                         action=Action.ERROR,
                         response="无法解析函数参数",
                     )
 
-            self.logger.debug(f"调用函数: {function_name}, 参数: {arguments}")
+            argument_keys = self.conn.content_safety.safe_tool_argument_keys(arguments)
+            self.logger.debug(
+                f"调用函数: {function_name}, 参数字段: {argument_keys}"
+            )
 
             # 发送工具调用显示消息到设备
             try:

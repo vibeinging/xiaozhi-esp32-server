@@ -77,6 +77,11 @@ class TTSProvider(TTSProviderBase):
         "学校地址",
         "电话号码",
         "隐私",
+        "可信任的大人",
+        "需要爸爸妈妈",
+        "不用告诉我",
+        "我不能教",
+        "不适合现在播放",
     )
 
     def __init__(self, config, delete_audio_file):
@@ -381,6 +386,12 @@ class TTSProvider(TTSProviderBase):
 
     def _should_append_cat_meow(self):
         if not self.cat_meow_enabled or not self._response_text.strip():
+            return False
+
+        if self._user_text.startswith("[儿童安全事件:"):
+            return False
+
+        if self.tts_text_queue.is_blocked(self.current_sentence_id):
             return False
 
         combined = f"{self._user_text}\n{self._response_text}"

@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from config.logger import setup_logging
 from core.providers.asr.dto.dto import InterfaceType
 from core.handle.receiveAudioHandle import startToChat
+from core.safety import summarize_text_for_log
 from core.handle.reportHandle import enqueue_asr_report
 from core.utils.util import remove_punctuation_and_length
 from core.handle.receiveAudioHandle import handleAudioMessage
@@ -137,9 +138,11 @@ class ASRProviderBase(ABC):
                 if raw_text.get("emotion"):
                     logger.bind(tag=TAG).info(f"识别情绪: {raw_text['emotion']}")
                 if raw_text.get("content"):
-                    logger.bind(tag=TAG).info(f"识别文本: {raw_text['content']}")
+                    logger.bind(tag=TAG).info(
+                        f"识别文本: {summarize_text_for_log(raw_text['content'])}"
+                    )
                 if speaker_name:
-                    logger.bind(tag=TAG).info(f"识别说话人: {speaker_name}")
+                    logger.bind(tag=TAG).info("识别到已登记说话人")
 
                 # 转换为 JSON 字符串用于下游
                 enhanced_text = json.dumps(raw_text, ensure_ascii=False)
@@ -147,9 +150,11 @@ class ASRProviderBase(ABC):
             else:
                 # 其他 ASR 返回的纯文本
                 if raw_text:
-                    logger.bind(tag=TAG).info(f"识别文本: {raw_text}")
+                    logger.bind(tag=TAG).info(
+                        f"识别文本: {summarize_text_for_log(raw_text)}"
+                    )
                 if speaker_name:
-                    logger.bind(tag=TAG).info(f"识别说话人: {speaker_name}")
+                    logger.bind(tag=TAG).info("识别到已登记说话人")
 
                 # 构建包含说话人信息的JSON字符串
                 enhanced_text = self._build_enhanced_text(raw_text, speaker_name)

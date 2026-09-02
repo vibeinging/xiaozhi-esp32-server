@@ -66,7 +66,9 @@ class ListenTextMessageHandler(TextMessageHandler):
                 if original_text.startswith("[device_call]"):
                     # 提取 tag 后的文本
                     call_text = original_text[len("[device_call]"):].strip()
-                    conn.logger.bind(tag=TAG).info(f"收到设备呼叫指令: {call_text}")
+                    conn.logger.bind(tag=TAG).info(
+                        f"收到设备呼叫指令，字符数={len(call_text)}"
+                    )
 
                     # 标记为来电接听模式
                     conn.incoming_call = True

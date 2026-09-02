@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from core.connection import ConnectionHandler
 
 from config.manage_api_client import report as manage_report
+from core.safety import summarize_text_for_log
 
 TAG = __name__
 
@@ -121,7 +122,9 @@ def enqueue_tts_report(conn: "ConnectionHandler", text, opus_data):
                 f"TTS数据已加入上报队列: {conn.device_id}, 不上报音频"
             )
     except Exception as e:
-        conn.logger.bind(tag=TAG).error(f"加入TTS上报队列失败: {text}, {e}")
+        conn.logger.bind(tag=TAG).error(
+            f"加入TTS上报队列失败: {summarize_text_for_log(text)}, {e}"
+        )
 
 
 def enqueue_tool_report(conn: "ConnectionHandler", tool_name: str, tool_input: dict, tool_result: str = None, report_tool_call: bool = True):
@@ -188,4 +191,6 @@ def enqueue_asr_report(conn: "ConnectionHandler", text, opus_data):
                 f"ASR数据已加入上报队列: {conn.device_id}, 不上报音频"
             )
     except Exception as e:
-        conn.logger.bind(tag=TAG).debug(f"加入ASR上报队列失败: {text}, {e}")
+        conn.logger.bind(tag=TAG).debug(
+            f"加入ASR上报队列失败: {summarize_text_for_log(text)}, {e}"
+        )

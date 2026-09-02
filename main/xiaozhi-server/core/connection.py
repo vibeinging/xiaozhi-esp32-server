@@ -18,7 +18,6 @@ from core.utils.util import (
     extract_json_from_string,
     check_vad_update,
     check_asr_update,
-    filter_sensitive_info,
 )
 from typing import Dict, Any
 from collections import deque
@@ -45,6 +44,7 @@ from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils.util import get_system_error_response
 from core.utils import textUtils
+from core.safety import ChildContentSafetyPolicy, summarize_text_for_log
 
 
 TAG = __name__
@@ -195,6 +195,7 @@ class ConnectionHandler:
 
         # 初始化提示词管理器
         self.prompt_manager = PromptManager(self.config, self.logger)
+        self.content_safety = ChildContentSafetyPolicy.from_config(self.config)
 
         # 初始化通话状态
         self.calling = False
@@ -216,7 +217,8 @@ class ConnectionHandler:
             else:
                 self.client_ip = ws.remote_address[0]
             self.logger.bind(tag=TAG).info(
-                f"{self.client_ip} conn - Headers: {self.headers}"
+                "设备连接建立: "
+                f"{summarize_text_for_log(self.headers.get('device-id'))}"
             )
 
             self.device_id = self.headers.get("device-id", None)
@@ -298,8 +300,16 @@ class ConnectionHandler:
 
                 threading.Thread(target=generate_title_task, daemon=True).start()
 
-            # 守护线程2：走老流程记忆保存（仅记忆，不含标题）
+            # 记忆保存（仅记忆，不含标题）
             if self.memory:
+                # MemMe 要求先把任务写入本地 SQLite 队列。这一步必须
+                # 在连接对象销毁前完成，不能交给可能随进程退出的守护线程。
+                if getattr(self.memory, "requires_durable_save", False):
+                    await self.memory.save_memory(
+                        self.dialogue.dialogue, self.session_id
+                    )
+                    return
+
                 # 使用线程池异步保存记忆
                 def save_memory_task():
                     try:
@@ -603,8 +613,12 @@ class ConnectionHandler:
 
     def _initialize_components(self):
         try:
+            # 儿童内容安全由首次加载的智能体配置决定，后续角色切换不能关闭。
+            self.content_safety = ChildContentSafetyPolicy.from_config(self.config)
             if self.tts is None:
                 self.tts = self._initialize_tts()
+            if hasattr(self.tts, "set_content_safety"):
+                self.tts.set_content_safety(self.content_safety)
             # 打开语音合成通道
             asyncio.run_coroutine_threadsafe(
                 self.tts.open_audio_channels(self), self.loop
@@ -810,11 +824,12 @@ class ConnectionHandler:
             )
             private_config["delete_audio"] = bool(self.config.get("delete_audio", True))
             self.logger.bind(tag=TAG).info(
-                f"{time.time() - begin_time} 秒，异步获取差异化配置成功: {json.dumps(filter_sensitive_info(private_config), ensure_ascii=False)}"
+                f"{time.time() - begin_time} 秒，异步获取差异化配置成功，"
+                f"字段={sorted(private_config.keys())}"
             )
             self.need_bind = False
             self.bind_completed_event.set()
-        except DeviceNotFoundException as e:
+        except DeviceNotFoundException:
             self.need_bind = True
             private_config = {}
         except DeviceBindException as e:
@@ -945,6 +960,8 @@ class ConnectionHandler:
             llm=self.llm,
             summary_memory=self.config.get("summaryMemory", None),
             save_to_file=not self.read_config_from_api,
+            device_id=self.device_id,
+            session_id=self.session_id,
         )
 
         # 获取记忆总结配置
@@ -1037,7 +1054,9 @@ class ConnectionHandler:
         current_sentence_id = None
 
         if query is not None:
-            self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
+            self.logger.bind(tag=TAG).info(
+                f"大模型收到用户消息: {summarize_text_for_log(query)}"
+            )
 
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
@@ -1124,7 +1143,9 @@ class ConnectionHandler:
                     ),
                 )
         except Exception as e:
-            self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
+            self.logger.bind(tag=TAG).error(
+                f"LLM 处理出错 ({summarize_text_for_log(query)}): {e}"
+            )
             return None
 
         # 处理流式响应
@@ -1237,7 +1258,7 @@ class ConnectionHandler:
                                 ),
                             }
                         )
-                    except Exception as e:
+                    except Exception:
                         bHasError = True
                         response_message.append(a)
                 else:
@@ -1245,7 +1266,8 @@ class ConnectionHandler:
                     response_message.append(content_arguments)
                 if bHasError:
                     self.logger.bind(tag=TAG).error(
-                        f"function call error: {content_arguments}"
+                        "function call parse failed: "
+                        f"{summarize_text_for_log(content_arguments)}"
                     )
 
             if not bHasError and len(tool_calls_list) > 0:
@@ -1255,7 +1277,7 @@ class ConnectionHandler:
 
                 if direct_answer_calls:
                     self.logger.bind(tag=TAG).debug(
-                        f"模型选择 direct_answer，流式已播报，写入对话历史"
+                        "模型选择 direct_answer，流式已播报，写入对话历史"
                     )
                     for tc in direct_answer_calls:
                         da_response = self._extract_direct_answer_response(tc.get("arguments", "{}"))
@@ -1276,6 +1298,9 @@ class ConnectionHandler:
                                     )
                             # 写入对话历史
                             da_response = self._clean_response_garbage(da_response)
+                            da_response = self.content_safety.guard_assistant_text(
+                                da_response
+                            )
                             self.tts.store_tts_text(current_sentence_id, da_response)
                             self.dialogue.put(Message(role="assistant", content=da_response))
 
@@ -1300,7 +1325,9 @@ class ConnectionHandler:
                 # LLM 流式阶段已播报过的文本
                 streamed_text = ""
                 if len(response_message) > 0:
-                    streamed_text = "".join(response_message)
+                    streamed_text = self.content_safety.guard_assistant_text(
+                        "".join(response_message)
+                    )
                     self.tts.store_tts_text(current_sentence_id, streamed_text)
                     self.dialogue.put(Message(role="assistant", content=streamed_text))
                 response_message.clear()
@@ -1308,8 +1335,13 @@ class ConnectionHandler:
                 # 收集所有工具调用的 Future
                 futures_with_data = []
                 for tool_call_data in tool_calls_list:
+                    argument_keys = self.content_safety.safe_tool_argument_keys(
+                        tool_call_data.get("arguments")
+                    )
                     self.logger.bind(tag=TAG).debug(
-                        f"function_name={tool_call_data['name']}, function_id={tool_call_data['id']}, function_arguments={tool_call_data['arguments']}"
+                        f"function_name={tool_call_data['name']}, "
+                        f"function_id={tool_call_data['id']}, "
+                        f"argument_keys={argument_keys}"
                     )
 
                     # 使用公共方法上报工具调用
@@ -1354,7 +1386,9 @@ class ConnectionHandler:
 
         # 存储对话内容
         if len(response_message) > 0:
-            text_buff = "".join(response_message)
+            text_buff = self.content_safety.guard_assistant_text(
+                "".join(response_message)
+            )
             self.tts.store_tts_text(current_sentence_id, text_buff)
             self.dialogue.put(Message(role="assistant", content=text_buff))
 
@@ -1368,9 +1402,7 @@ class ConnectionHandler:
             )
             # 使用lambda延迟计算，只有在DEBUG级别时才执行get_llm_dialogue()
             self.logger.bind(tag=TAG).debug(
-                lambda: json.dumps(
-                    self.dialogue.get_llm_dialogue(), indent=4, ensure_ascii=False
-                )
+                f"会话轮次处理完成，消息数={len(self.dialogue.dialogue)}"
             )
 
         return True
@@ -1385,7 +1417,10 @@ class ConnectionHandler:
                 Action.NOTFOUND,
                 Action.ERROR,
             ]:
-                text = result.response if result.response else result.result
+                raw_text = result.response if result.response else result.result
+                if raw_text is None:
+                    continue
+                text = self.content_safety.guard_assistant_text(raw_text)
                 if streamed_text and text in streamed_text:
                     self.logger.bind(tag=TAG).debug(
                         f"Skipping duplicate TTS for tool {tool_call_data['name']}, already streamed"
@@ -1425,7 +1460,9 @@ class ConnectionHandler:
 
             # 写入每条工具的执行结果，记录"工具返回了什么"
             for result, tool_call_data in record_tools:
-                text = result.result or ""
+                text = self.content_safety.sanitize_tool_result(
+                    tool_call_data["name"], result.result or ""
+                )
                 self.dialogue.put(
                     Message(
                         role="tool",
@@ -1441,7 +1478,10 @@ class ConnectionHandler:
             # 用固定文本作为最终回复，补全标准三段式，保证下一条消息是 user 而非接 tool
             response_parts = []
             for result, _ in record_tools:
-                resp = result.response or result.result
+                raw_response = result.response or result.result
+                if raw_response is None:
+                    continue
+                resp = self.content_safety.guard_assistant_text(raw_response)
                 if resp:
                     response_parts.append(resp)
             if response_parts:
@@ -1467,7 +1507,9 @@ class ConnectionHandler:
             self.dialogue.put(Message(role="assistant", tool_calls=all_tool_calls))
 
             for result, tool_call_data in need_llm_tools:
-                text = result.result
+                text = self.content_safety.sanitize_tool_result(
+                    tool_call_data["name"], result.result
+                )
                 if text is not None and len(text) > 0:
                     self.dialogue.put(
                         Message(
@@ -1519,7 +1561,7 @@ class ConnectionHandler:
 
     def clearSpeakStatus(self):
         self.client_is_speaking = False
-        self.logger.bind(tag=TAG).debug(f"清除服务端讲话状态")
+        self.logger.bind(tag=TAG).debug("清除服务端讲话状态")
 
     async def close(self, ws=None):
         """资源清理方法"""
