@@ -6,6 +6,8 @@ if TYPE_CHECKING:
 
 TAG = __name__
 EMOJI_MAP = {
+    "🤩": "excited",
+    "⭐": "excited",
     "😂": "funny",
     "😭": "crying",
     "😠": "angry",
@@ -83,8 +85,8 @@ def is_punctuation_or_emoji(char):
 
 async def get_emotion(conn: "ConnectionHandler", text):
     """获取文本内的情绪消息"""
-    emoji = "🙂"
-    emotion = "happy"
+    emoji = "😶"
+    emotion = "neutral"
     for char in text:
         if char in EMOJI_MAP:
             emoji = char
