@@ -925,6 +925,7 @@ export default {
   'agentSnapshot.model.Memory_nomem': 'Sem memória',
   'agentSnapshot.model.Memory_mem_local_short': 'Memória curta local',
   'agentSnapshot.model.Memory_mem0ai': 'Memória Mem0AI',
+  'agentSnapshot.model.Memory_memme': 'Memória local de longo prazo MemMe',
   'agentSnapshot.model.Memory_mem_report_only': 'Somente relatório',
   'agentSnapshot.model.Intent_nointent': 'Sem reconhecimento de intenção',
   'agentSnapshot.model.Intent_intent_llm': 'Reconhecimento de intenção por LLM externo',

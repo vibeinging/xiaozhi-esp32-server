@@ -105,6 +105,8 @@ public class ConfigServiceImpl implements ConfigService {
                 null,
                 null,
                 null,
+                null,
+                null,
                 result,
                 isCache);
 
@@ -241,6 +243,8 @@ public class ConfigServiceImpl implements ConfigService {
                 agent.getMemModelId(),
                 agent.getIntentModelId(),
                 null,
+                agent.getUserId(),
+                agent.getId(),
                 result,
                 true);
 
@@ -413,6 +417,8 @@ public class ConfigServiceImpl implements ConfigService {
      * @param ttsModelId     TTS模型ID
      * @param memModelId     记忆模型ID
      * @param intentModelId  意图模型ID
+     * @param memoryUserId   MemMe 使用的稳定账号ID
+     * @param memoryAgentId  MemMe 使用的稳定智能体ID
      * @param result         结果Map
      */
     private void buildModuleConfig(
@@ -435,6 +441,8 @@ public class ConfigServiceImpl implements ConfigService {
             String memModelId,
             String intentModelId,
             String ragModelId,
+            Long memoryUserId,
+            String memoryAgentId,
             Map<String, Object> result,
             boolean isCache) {
         Map<String, String> selectedModule = new HashMap<>();
@@ -456,36 +464,38 @@ public class ConfigServiceImpl implements ConfigService {
             }
             Map<String, Object> typeConfig = new HashMap<>();
             if (model.getConfigJson() != null) {
-                typeConfig.put(model.getId(), model.getConfigJson());
+                // 配置来自缓存。每次请求都复制一份，避免设备之间共享 TTS、插件或
+                // MemMe 身份等本次请求才有的字段。
+                Map<String, Object> requestConfig = new HashMap<>(model.getConfigJson());
+                typeConfig.put(model.getId(), requestConfig);
                 // 如果是TTS类型，添加private_voice属性
                 if ("TTS".equals(modelTypes[i])) {
                     if (voice != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("private_voice", voice);
+                        requestConfig.put("private_voice", voice);
                     if (referenceAudio != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("ref_audio", referenceAudio);
+                        requestConfig.put("ref_audio", referenceAudio);
                     if (referenceText != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("ref_text", referenceText);
+                        requestConfig.put("ref_text", referenceText);
                     if (language != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("language", language);
+                        requestConfig.put("language", language);
                     if (ttsVolume != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("ttsVolume", ttsVolume);
+                        requestConfig.put("ttsVolume", ttsVolume);
                     if (ttsRate != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("ttsRate", ttsRate);
+                        requestConfig.put("ttsRate", ttsRate);
                     if (ttsPitch != null)
-                        ((Map<String, Object>) model.getConfigJson()).put("ttsPitch", ttsPitch);
+                        requestConfig.put("ttsPitch", ttsPitch);
 
                     // 火山引擎声音克隆需要替换resource_id
-                    Map<String, Object> map = (Map<String, Object>) model.getConfigJson();
-                    if (Constant.VOICE_CLONE_HUOSHAN_DOUBLE_STREAM.equals(map.get("type"))) {
+                    if (Constant.VOICE_CLONE_HUOSHAN_DOUBLE_STREAM.equals(requestConfig.get("type"))) {
                         // 如果voice是”S_”开头的，使用seed-icl-1.0
                         if (voice != null && voice.startsWith("S_")) {
-                            map.put("resource_id", "seed-icl-1.0");
+                            requestConfig.put("resource_id", "seed-icl-1.0");
                         }
                     }
                 }
                 // 如果是Intent类型，且type=intent_llm，则给他添加附加模型
                 if ("Intent".equals(modelTypes[i])) {
-                    Map<String, Object> map = (Map<String, Object>) model.getConfigJson();
+                    Map<String, Object> map = requestConfig;
                     if ("intent_llm".equals(map.get("type"))) {
                         intentLLMModelId = (String) map.get("llm");
                         if (StringUtils.isNotBlank(intentLLMModelId) && intentLLMModelId.equals(llmModelId)) {
@@ -502,13 +512,15 @@ public class ConfigServiceImpl implements ConfigService {
                     System.out.println("map: " + map);
                 }
                 if ("Memory".equals(modelTypes[i])) {
-                    Map<String, Object> map = (Map<String, Object>) model.getConfigJson();
+                    Map<String, Object> map = requestConfig;
                     if ("mem_local_short".equals(map.get("type"))) {
                         memLocalShortLLMModelId = (String) map.get("llm");
                         if (StringUtils.isNotBlank(memLocalShortLLMModelId)
                                 && memLocalShortLLMModelId.equals(llmModelId)) {
                             memLocalShortLLMModelId = null;
                         }
+                    } else if ("memme".equals(map.get("type"))) {
+                        applyMemMeScope(map, memoryUserId, memoryAgentId);
                     }
                 }
                 // 如果是LLM类型，且intentLLMModelId不为空，则添加附加模型
@@ -550,5 +562,15 @@ public class ConfigServiceImpl implements ConfigService {
         }
         result.put("prompt", prompt);
         result.put("summaryMemory", summaryMemory);
+    }
+
+    static void applyMemMeScope(Map<String, Object> config, Long userId, String agentId) {
+        config.remove("user_id");
+        config.remove("agent_id");
+        if (userId == null || userId <= 0 || StringUtils.isBlank(agentId)) {
+            return;
+        }
+        config.put("user_id", "xiaozhi-user-" + userId);
+        config.put("agent_id", "xiaozhi-agent-" + agentId);
     }
 }

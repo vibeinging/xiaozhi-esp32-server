@@ -363,7 +363,8 @@ Memory:
     queue_max_bytes: 268435456
     recall_limit: 5
     recall_max_chars: 4000
-    compact_on_save: true
+    # 没有给 MemMe 配置 LLM 时保持 false；原始事件仍可立即召回。
+    compact_on_save: false
     # 默认不向记忆库传设备 MAC。
     include_device_id: false
   nomem:

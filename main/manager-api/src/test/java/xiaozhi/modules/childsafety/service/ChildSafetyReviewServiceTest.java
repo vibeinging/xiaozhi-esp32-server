@@ -18,18 +18,48 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import xiaozhi.modules.agent.dto.AgentUpdateDTO;
 import xiaozhi.modules.agent.entity.AgentChatHistoryEntity;
 import xiaozhi.modules.agent.entity.AgentEntity;
 import xiaozhi.modules.agent.service.AgentChatHistoryService;
 import xiaozhi.modules.agent.service.AgentService;
+import xiaozhi.modules.agent.vo.AgentInfoVO;
 import xiaozhi.modules.childsafety.dao.ChildSafetyEventDao;
 import xiaozhi.modules.childsafety.dao.ChildSafetyReviewDao;
 import xiaozhi.modules.childsafety.dao.ChildSafetySettingDao;
+import xiaozhi.modules.childsafety.dto.ChildSafetySettingDTO;
 import xiaozhi.modules.childsafety.entity.ChildSafetyReviewEntity;
 import xiaozhi.modules.childsafety.entity.ChildSafetySettingEntity;
 import xiaozhi.modules.llm.service.LLMService;
 
 class ChildSafetyReviewServiceTest {
+    @Test
+    void enablingChildSafetyKeepsMemMeAndForcesTextOnlyHistory() {
+        ChildSafetySettingDao settingDao = mock(ChildSafetySettingDao.class);
+        AgentService agentService = mock(AgentService.class);
+        AgentInfoVO agent = new AgentInfoVO();
+        agent.setId("agent-memme");
+        agent.setUserId(7L);
+        agent.setMemModelId("Memory_memme");
+        agent.setChatHistoryConf(2);
+        when(agentService.getAgentById("agent-memme", 7L)).thenReturn(agent);
+        when(settingDao.selectOne(any())).thenReturn(null);
+
+        ChildSafetyReviewService service = new ChildSafetyReviewService(
+                settingDao, mock(ChildSafetyReviewDao.class), mock(ChildSafetyEventDao.class),
+                agentService, mock(AgentChatHistoryService.class), mock(LLMService.class));
+        ChildSafetySettingDTO setting = new ChildSafetySettingDTO();
+        setting.setEnabled(true);
+
+        service.updateSetting("agent-memme", 7L, setting);
+
+        ArgumentCaptor<AgentUpdateDTO> update = ArgumentCaptor.forClass(AgentUpdateDTO.class);
+        verify(agentService).updateAgentById(org.mockito.ArgumentMatchers.eq("agent-memme"),
+                update.capture(), org.mockito.ArgumentMatchers.eq(7L));
+        assertEquals(null, update.getValue().getMemModelId());
+        assertEquals(1, update.getValue().getChatHistoryConf());
+    }
+
     @Test
     void redactsPrivateValuesBeforeModelReview() {
         String result = ChildSafetyReviewService.redact(

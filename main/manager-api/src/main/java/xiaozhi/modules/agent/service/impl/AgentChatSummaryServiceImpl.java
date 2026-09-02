@@ -109,7 +109,8 @@ public class AgentChatSummaryServiceImpl implements AgentChatSummaryService {
 
             boolean shouldSummarizeMemory = !memModelId.equals(Constant.MEMORY_NO_MEM)
                     && !memModelId.equals(Constant.MEMORY_MEM0AI)
-                    && !memModelId.equals(Constant.MEMORY_POWERMEM);
+                    && !memModelId.equals(Constant.MEMORY_POWERMEM)
+                    && !memModelId.equals(Constant.MEMORY_MEMME);
 
             if (shouldSummarizeMemory) {
                 AgentChatSummaryDTO summaryDTO = generateChatSummary(sessionId);

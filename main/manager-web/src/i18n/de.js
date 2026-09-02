@@ -925,6 +925,7 @@ export default {
   'agentSnapshot.model.Memory_nomem': 'Kein Speicher',
   'agentSnapshot.model.Memory_mem_local_short': 'Lokaler Kurzzeitspeicher',
   'agentSnapshot.model.Memory_mem0ai': 'Mem0AI-Speicher',
+  'agentSnapshot.model.Memory_memme': 'Lokaler MemMe-Langzeitspeicher',
   'agentSnapshot.model.Memory_mem_report_only': 'Nur melden',
   'agentSnapshot.model.Intent_nointent': 'Keine Absichtserkennung',
   'agentSnapshot.model.Intent_intent_llm': 'Externe LLM-Absichtserkennung',

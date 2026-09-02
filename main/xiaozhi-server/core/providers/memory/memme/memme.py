@@ -69,7 +69,9 @@ class MemoryProvider(MemoryProviderBase):
             self.retry_base_seconds,
             float(config.get("retry_max_seconds", 3600)),
         )
-        self.compact_on_save = _as_bool(config.get("compact_on_save"), True)
+        # Compact needs an LLM on the MemMe server. Raw events are already
+        # searchable, so the safe no-LLM default must not create endless retries.
+        self.compact_on_save = _as_bool(config.get("compact_on_save"), False)
         self.include_device_id = _as_bool(config.get("include_device_id"), False)
         queue_path = os.path.expandvars(
             str(config.get("queue_path", "data/memme-retry.sqlite3"))

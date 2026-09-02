@@ -127,15 +127,25 @@ public class ChildSafetyReviewService {
                 setting.setPreviousChatHistoryConf(agent.getChatHistoryConf());
             }
             AgentUpdateDTO update = new AgentUpdateDTO();
-            update.setMemModelId(Constant.MEMORY_MEM_REPORT_ONLY);
+            // 儿童安全复查只要求保留文字聊天。已有长期记忆可以同时工作；
+            // 只有原来没有记忆时，才切到“仅上报”来保证复查有数据。
+            if (StringUtils.isBlank(agent.getMemModelId())
+                    || Constant.MEMORY_NO_MEM.equals(agent.getMemModelId())) {
+                update.setMemModelId(Constant.MEMORY_MEM_REPORT_ONLY);
+            }
             update.setChatHistoryConf(Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode());
             agentService.updateAgentById(agentId, update, userId);
         } else if (wasEnabled) {
-            AgentUpdateDTO update = new AgentUpdateDTO();
-            update.setMemModelId(StringUtils.defaultIfBlank(setting.getPreviousMemModelId(), Constant.MEMORY_NO_MEM));
-            update.setChatHistoryConf(Objects.requireNonNullElse(setting.getPreviousChatHistoryConf(),
-                    Constant.ChatHistoryConfEnum.IGNORE.getCode()));
-            agentService.updateAgentById(agentId, update, userId);
+            // 只撤销本服务自己设置的“仅上报”。如果用户在开启安全复查期间
+            // 选择了 MemMe 等记忆模型，关闭复查时不能覆盖用户的新选择。
+            if (Constant.MEMORY_MEM_REPORT_ONLY.equals(agent.getMemModelId())) {
+                AgentUpdateDTO update = new AgentUpdateDTO();
+                update.setMemModelId(
+                        StringUtils.defaultIfBlank(setting.getPreviousMemModelId(), Constant.MEMORY_NO_MEM));
+                update.setChatHistoryConf(Objects.requireNonNullElse(setting.getPreviousChatHistoryConf(),
+                        Constant.ChatHistoryConfEnum.IGNORE.getCode()));
+                agentService.updateAgentById(agentId, update, userId);
+            }
         }
 
         setting.setEnabled(dto.getEnabled());

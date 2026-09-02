@@ -925,6 +925,7 @@ export default {
   'agentSnapshot.model.Memory_nomem': 'Không có bộ nhớ',
   'agentSnapshot.model.Memory_mem_local_short': 'Bộ nhớ ngắn cục bộ',
   'agentSnapshot.model.Memory_mem0ai': 'Bộ nhớ Mem0AI',
+  'agentSnapshot.model.Memory_memme': 'Bộ nhớ dài hạn cục bộ MemMe',
   'agentSnapshot.model.Memory_mem_report_only': 'Chỉ báo cáo bộ nhớ',
   'agentSnapshot.model.Intent_nointent': 'Không nhận dạng ý định',
   'agentSnapshot.model.Intent_intent_llm': 'Nhận dạng ý định bằng LLM bên ngoài',

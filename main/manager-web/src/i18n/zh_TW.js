@@ -925,6 +925,7 @@ export default {
   'agentSnapshot.model.Memory_nomem': '無記憶',
   'agentSnapshot.model.Memory_mem_local_short': '本地短記憶',
   'agentSnapshot.model.Memory_mem0ai': 'Mem0AI記憶',
+  'agentSnapshot.model.Memory_memme': 'MemMe本地長期記憶',
   'agentSnapshot.model.Memory_mem_report_only': '僅上報記憶',
   'agentSnapshot.model.Intent_nointent': '無意圖識別',
   'agentSnapshot.model.Intent_intent_llm': '外掛的大模型意圖識別',
