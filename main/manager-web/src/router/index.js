@@ -61,6 +61,17 @@ const routes = [
       return import('../views/DeviceManagement.vue')
     }
   },
+  {
+    path: '/child-safety',
+    name: 'ChildSafety',
+    component: function () {
+      return import('../views/ChildSafetyCenter.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '家长安全中心'
+    }
+  },
   // 添加用户管理路由
   {
     path: '/user-management',
@@ -229,7 +240,7 @@ VueRouter.prototype.push = function push(location) {
 }
 
 // 需要登录才能访问的路由
-const protectedRoutes = ['home', 'RoleConfig', 'DeviceManagement', 'UserManagement', 'ModelConfig', 'KnowledgeBaseManagement', 'KnowledgeFileUpload', 'AddressBookManagement']
+const protectedRoutes = ['home', 'RoleConfig', 'DeviceManagement', 'ChildSafety', 'UserManagement', 'ModelConfig', 'KnowledgeBaseManagement', 'KnowledgeFileUpload', 'AddressBookManagement']
 
 // 路由守卫
 router.beforeEach((to, from, next) => {

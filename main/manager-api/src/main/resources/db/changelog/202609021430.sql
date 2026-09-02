@@ -1,0 +1,60 @@
+CREATE TABLE IF NOT EXISTS `ai_child_safety_setting` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `agent_id` varchar(32) NOT NULL COMMENT '智能体ID',
+  `enabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否开启',
+  `review_time` varchar(5) NOT NULL DEFAULT '22:00' COMMENT '每日复查时间 HH:mm',
+  `timezone` varchar(50) NOT NULL DEFAULT 'Asia/Shanghai' COMMENT '时区',
+  `chat_retention_days` int NOT NULL DEFAULT 7 COMMENT '聊天文字保留天数',
+  `report_retention_days` int NOT NULL DEFAULT 90 COMMENT '安全报告保留天数',
+  `previous_mem_model_id` varchar(32) DEFAULT NULL COMMENT '开启前的记忆模型',
+  `previous_chat_history_conf` tinyint DEFAULT NULL COMMENT '开启前的聊天记录配置',
+  `creator` bigint DEFAULT NULL COMMENT '创建者',
+  `create_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` bigint DEFAULT NULL COMMENT '更新者',
+  `update_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_child_safety_setting_agent` (`agent_id`),
+  KEY `idx_child_safety_setting_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='儿童聊天安全复查设置';
+
+CREATE TABLE IF NOT EXISTS `ai_child_safety_review` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `agent_id` varchar(32) NOT NULL COMMENT '智能体ID',
+  `owner_user_id` bigint NOT NULL COMMENT '家长用户ID',
+  `review_date` date NOT NULL COMMENT '日报日期',
+  `review_start_at` datetime NOT NULL COMMENT '复查起点',
+  `review_end_at` datetime NOT NULL COMMENT '复查终点',
+  `message_count` int NOT NULL DEFAULT 0 COMMENT '复查消息数',
+  `risk_level` varchar(16) NOT NULL COMMENT '最高风险等级',
+  `risk_count` int NOT NULL DEFAULT 0 COMMENT '风险项数量',
+  `summary` varchar(1000) NOT NULL COMMENT '家长摘要',
+  `details_json` text COMMENT '结构化风险项，不含原文',
+  `parent_advice` varchar(1000) DEFAULT NULL COMMENT '给家长的建议',
+  `status` varchar(24) NOT NULL COMMENT 'PROCESSING/COMPLETED/FAILED',
+  `read_at` datetime DEFAULT NULL COMMENT '家长已读时间',
+  `last_error` varchar(500) DEFAULT NULL COMMENT '失败原因，不含聊天内容',
+  `attempt_count` int NOT NULL DEFAULT 0 COMMENT '尝试次数',
+  `reviewed_at` datetime DEFAULT NULL COMMENT '完成时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_child_safety_review_agent_date` (`agent_id`,`review_date`),
+  KEY `idx_child_safety_review_owner_unread` (`owner_user_id`,`read_at`),
+  KEY `idx_child_safety_review_date` (`review_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='儿童聊天安全日报';
+
+CREATE TABLE IF NOT EXISTS `ai_child_safety_event` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `agent_id` varchar(32) NOT NULL COMMENT '智能体ID',
+  `owner_user_id` bigint NOT NULL COMMENT '家长用户ID',
+  `history_id` bigint NOT NULL COMMENT '已脱敏聊天记录ID',
+  `category` varchar(64) NOT NULL COMMENT '风险分类',
+  `risk_level` varchar(16) NOT NULL COMMENT '风险等级',
+  `occurred_at` datetime NOT NULL COMMENT '发生时间',
+  `read_at` datetime DEFAULT NULL COMMENT '家长已读时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_child_safety_event_history` (`history_id`),
+  KEY `idx_child_safety_event_owner_unread` (`owner_user_id`,`read_at`),
+  KEY `idx_child_safety_event_agent_time` (`agent_id`,`occurred_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='儿童聊天即时安全事件';

@@ -28,6 +28,14 @@
           }" />
           <span class="nav-text">{{ $t("header.smartManagement") }}</span>
         </div>
+        <div class="equipment-management safety-nav"
+          :class="{ 'active-tab': $route.path === '/child-safety' }"
+          @click="handleRouter('childSafety')">
+          <i class="el-icon-lock safety-nav-icon"></i>
+          <el-badge :value="safetyUnreadCount" :hidden="!safetyUnreadCount" :max="99">
+            <span class="nav-text">{{ $t("header.childSafety") }}</span>
+          </el-badge>
+        </div>
         <!-- 普通用户显示音色克隆 -->
         <div v-if="!userInfo.superAdmin && featureStatus.voiceClone" class="equipment-management"
           :class="{ 'active-tab': $route.path === '/voice-clone-management' }"
@@ -184,6 +192,7 @@ import i18n, { changeLanguage } from "@/i18n";
 import featureManager from "@/utils/featureManager"; // 引入功能管理工具类
 import { mapActions, mapState } from "vuex";
 import ChangePasswordDialog from "./ChangePasswordDialog.vue"; // 引入修改密码弹窗组件
+import Api from "@/apis/api";
 
 export default {
   name: "HeaderBar",
@@ -198,6 +207,7 @@ export default {
       paramDropdownVisible: false,
       voiceCloneDropdownVisible: false,
       userMenuVisible: false, // 添加用户菜单可见状态
+      safetyUnreadCount: 0,
       menuVisibleTimer: null, // 菜单显示定时器，防止够快触发
       // Cascader 配置
       cascaderProps: {
@@ -209,6 +219,7 @@ export default {
       // 跳转页面配置
       routerPaths: {
         home: "/home",
+        childSafety: "/child-safety",
         modelConfig: "/model-config",
         knowledgeBaseManagement: "/knowledge-base-management",
         addressBookManagement: "/address-book-management",
@@ -326,6 +337,7 @@ export default {
   async mounted() {
     // 等待featureManager初始化完成后再加载功能状态
     await this.loadFeatureStatus();
+    this.loadSafetyUnreadCount();
   },
   methods: {
     handleRouter(type) {
@@ -335,6 +347,13 @@ export default {
     async loadFeatureStatus() {
       // 等待featureManager初始化完成
       await featureManager.waitForInitialization();
+    },
+    loadSafetyUnreadCount() {
+      Api.childSafety.getDashboard(({ data }) => {
+        this.safetyUnreadCount = Number(data?.data?.unreadCount || 0);
+      }, () => {
+        this.safetyUnreadCount = 0;
+      });
     },
     // 显示修改密码弹窗
     showChangePasswordDialog() {
@@ -616,6 +635,20 @@ export default {
 .equipment-management img {
   width: 15px;
   height: 13px;
+}
+
+.safety-nav-icon {
+  font-size: 15px;
+}
+
+.safety-nav.active-tab .safety-nav-icon {
+  color: #fff;
+}
+
+.safety-nav ::v-deep .el-badge__content {
+  border: 2px solid #f8f3ed;
+  top: -8px;
+  right: 2px;
 }
 
 .avatar-img {
