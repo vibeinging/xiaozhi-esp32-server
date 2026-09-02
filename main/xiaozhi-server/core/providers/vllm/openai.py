@@ -16,6 +16,7 @@ class VLLMProvider(VLLMProviderBase):
             self.base_url = config.get("base_url")
         else:
             self.base_url = config.get("url")
+        self.enable_thinking = config.get("enable_thinking")
 
         param_defaults = {
             "max_tokens": (500, int),
@@ -57,9 +58,16 @@ class VLLMProvider(VLLMProviderBase):
                 }
             ]
 
-            response = self.client.chat.completions.create(
-                model=self.model_name, messages=messages, stream=False
-            )
+            request_options = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": False,
+            }
+            if self.enable_thinking is not None:
+                request_options["extra_body"] = {
+                    "enable_thinking": bool(self.enable_thinking)
+                }
+            response = self.client.chat.completions.create(**request_options)
 
             return response.choices[0].message.content
 

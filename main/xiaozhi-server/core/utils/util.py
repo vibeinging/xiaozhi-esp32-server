@@ -17,6 +17,18 @@ from typing import Callable, Any
 TAG = __name__
 
 
+def _audio_codec_for_file_type(file_type):
+    """对编码类型确定的格式显式指定解码器。
+
+    pydub 在没有指定 codec 时会先调用 ffprobe。Edge TTS 返回的
+    内容固定是 MP3，直接指定 mp3 可以避免不必要的外部探测，也能
+    在只携带 ffmpeg 的精简部署中正常工作。
+    """
+    if isinstance(file_type, str) and file_type.lower() == "mp3":
+        return "mp3"
+    return None
+
+
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -235,7 +247,10 @@ def audio_to_data_stream(
         file_type = file_type.lstrip(".")
     # 读取音频文件，-nostdin 参数：不要从标准输入读取数据，否则FFmpeg会阻塞
     audio = AudioSegment.from_file(
-        audio_file_path, format=file_type, parameters=["-nostdin"]
+        audio_file_path,
+        format=file_type,
+        codec=_audio_codec_for_file_type(file_type),
+        parameters=["-nostdin"],
     )
 
     # 转换为单声道/指定采样率/16位小端编码（确保与编码器匹配）
@@ -275,7 +290,10 @@ async def audio_to_data(
             file_type = file_type.lstrip(".")
         # 读取音频文件，-nostdin 参数：不要从标准输入读取数据，否则FFmpeg会阻塞
         audio = AudioSegment.from_file(
-            audio_file_path, format=file_type, parameters=["-nostdin"]
+            audio_file_path,
+            format=file_type,
+            codec=_audio_codec_for_file_type(file_type),
+            parameters=["-nostdin"],
         )
 
         # 转换为单声道/16kHz采样率/16位小端编码（确保与编码器匹配）
@@ -336,7 +354,10 @@ def audio_bytes_to_data_stream(
     else:
         # 其他格式用pydub
         audio = AudioSegment.from_file(
-            BytesIO(audio_bytes), format=file_type, parameters=["-nostdin"]
+            BytesIO(audio_bytes),
+            format=file_type,
+            codec=_audio_codec_for_file_type(file_type),
+            parameters=["-nostdin"],
         )
         audio = audio.set_channels(1).set_frame_rate(sample_rate).set_sample_width(2)
         raw_data = audio.raw_data

@@ -107,6 +107,7 @@ class ConnectionHandler:
         self.client_ip = None
         self.prompt = None
         self.welcome_msg = None
+        self.current_user_query = ""
         self.max_output_size = 0
         self.chat_history_conf = 0
         self.audio_format = "opus"
@@ -1042,6 +1043,7 @@ class ConnectionHandler:
         if depth == 0:
             current_sentence_id = str(uuid.uuid4().hex)
             self.sentence_id = current_sentence_id  # 更新共享属性
+            self.current_user_query = str(query or "")
             self.dialogue.put(Message(role="user", content=query))
             self.tts.tts_text_queue.put(
                 TTSMessageDTO(

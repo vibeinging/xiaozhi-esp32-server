@@ -557,6 +557,16 @@ ASR:
     enable_itn: true  # 逆文本归一化
     #language: "zh"  # 语种，支持zh、en、ja、ko等
     context: ""  # 上下文信息，用于提高识别准确率，不超过10000 Token
+  Qwen3ASRRealtime:
+    # 通义千问 Qwen3-ASR-Flash-Realtime 实时语音识别。
+    # 专属业务空间可直接填它的 OpenAI 兼容 base_url，程序会自动换成同域 WebSocket 地址。
+    type: qwen3_asr_realtime
+    api_key: 你的阿里云百炼API密钥
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen3-asr-flash-realtime-2026-02-10
+    sample_rate: 16000
+    language: zh
+    output_dir: tmp/
   XunfeiStreamASR:
     # 讯飞流式语音识别服务
     # 需要先在讯飞开放平台创建应用，获取以下认证信息
@@ -1149,6 +1159,21 @@ TTS:
     # rate: 1  # 语速：0.5~2
     # pitch: 1  # 语调：0.5~2
     # language: "中文"  # 指定输出语种,如:中文、英语、日语、韩语等,请根据所选音色支持的语言进行设置,不填则默认为中文
+  Qwen3TTSRealtime:
+    # 通义千问 Qwen3-TTS-Flash-Realtime。PCM 到达服务端后会立即转成设备 Opus。
+    type: qwen3_tts_realtime
+    api_key: 你的阿里云百炼API密钥
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen3-tts-flash-realtime
+    voice: Momo
+    language_type: Chinese
+    volume: 50
+    speech_rate: 1.0
+    pitch_rate: 1.0
+    cat_meow_enabled: true
+    cat_meow_probability: 0.5
+    max_segment_chars: 18
+    output_dir: tmp/
   XunFeiTTS:
     # 讯飞TTS服务 官方网站：https://www.xfyun.cn/
     # 登录讯飞语音技术平台 https://console.xfyun.cn/app/myapp 创建相关应用
