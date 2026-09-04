@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,6 +23,7 @@ public class MemMeDataService {
     private final String apiKey;
     private final String internalBaseUrl;
 
+    @Autowired
     public MemMeDataService(ObjectMapper objectMapper) {
         this(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build(),

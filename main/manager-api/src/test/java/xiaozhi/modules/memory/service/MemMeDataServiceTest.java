@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
@@ -18,6 +19,13 @@ import com.sun.net.httpserver.HttpServer;
 import xiaozhi.common.exception.RenException;
 
 class MemMeDataServiceTest {
+
+    @Test
+    void productionConstructorIsExplicitlySelectedForSpringInjection() throws Exception {
+        assertTrue(MemMeDataService.class
+                .getConstructor(ObjectMapper.class)
+                .isAnnotationPresent(Autowired.class));
+    }
 
     @Test
     void exportUsesStableServerSideUserIdAndBearerToken() throws Exception {
