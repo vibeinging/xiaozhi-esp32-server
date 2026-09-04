@@ -48,5 +48,4 @@ UPDATE `ai_agent_template`
 SET
   `tts_voice_id` = 'TTS_Qwen3Realtime_Bunny',
   `updated_at` = NOW()
-WHERE `system_prompt` LIKE '%[CHILD_SAFETY_PROFILE:v1]%'
-  AND `tts_model_id` = 'TTS_Qwen3Realtime';
+WHERE `tts_model_id` = 'TTS_Qwen3Realtime';
