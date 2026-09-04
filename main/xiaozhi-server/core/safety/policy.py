@@ -102,6 +102,28 @@ class ChildContentSafetyPolicy:
             "handle_exit_intent",
         }
     )
+    _TOOL_INTENT_PATTERNS = {
+        "get_weather": re.compile(
+            r"天气|气温|温度|下雨|下雪|刮风|冷不冷|热不热|"
+            r"\b(?:weather|temperature|rain|snow|windy|forecast)\b",
+            re.IGNORECASE,
+        ),
+        "get_time": re.compile(
+            r"几点|时间|日期|星期|周几|几号|"
+            r"\b(?:time|date|day of the week)\b",
+            re.IGNORECASE,
+        ),
+        "play_music": re.compile(
+            r"(?:播放|放|听|唱).{0,8}(?:歌|音乐|儿歌)|来一首|"
+            r"\b(?:play|sing|listen to).{0,20}(?:song|music|nursery rhyme)\b",
+            re.IGNORECASE,
+        ),
+        "handle_exit_intent": re.compile(
+            r"再见|拜拜|不聊了|退出|结束聊天|先这样|"
+            r"\b(?:goodbye|bye|stop chatting|exit)\b",
+            re.IGNORECASE,
+        ),
+    }
 
     _SELF_HARM_PATTERNS = (
         re.compile(r"不想活(?:了|下去)?"),
@@ -255,10 +277,15 @@ class ChildContentSafetyPolicy:
         decision = self.evaluate_output(text)
         return decision.safe_text or decision.response or OUTPUT_BLOCK_RESPONSE
 
-    def can_execute_tool(self, tool_name: str) -> bool:
+    def can_execute_tool(self, tool_name: str, user_text: Any = None) -> bool:
         if not self.enabled:
             return True
-        return tool_name in self.ALLOWED_TOOLS
+        if tool_name not in self.ALLOWED_TOOLS:
+            return False
+        if user_text is None:
+            return True
+        pattern = self._TOOL_INTENT_PATTERNS.get(tool_name)
+        return bool(pattern and pattern.search(str(user_text)))
 
     def filter_function_descriptions(self, functions):
         if not self.enabled:

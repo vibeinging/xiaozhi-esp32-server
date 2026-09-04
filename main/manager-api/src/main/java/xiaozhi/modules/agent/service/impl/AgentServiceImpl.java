@@ -99,6 +99,9 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
 
         if (agent.getMemModelId() != null && agent.getMemModelId().equals(Constant.MEMORY_NO_MEM)) {
             agent.setChatHistoryConf(Constant.ChatHistoryConfEnum.IGNORE.getCode());
+        } else if (Constant.MEMORY_MEMME.equals(agent.getMemModelId())
+                || Constant.MEMORY_MEM_REPORT_ONLY.equals(agent.getMemModelId())) {
+            agent.setChatHistoryConf(Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode());
         }
         if (agent.getChatHistoryConf() == null) {
             agent.setChatHistoryConf(Constant.ChatHistoryConfEnum.RECORD_TEXT_AUDIO.getCode());
@@ -283,8 +286,8 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
         // 获取 TTS 音色名称
         dto.setTtsVoiceName(timbreModelService.getTimbreNameById(agent.getTtsVoiceId()));
 
-        // 获取智能体最近的最后连接时长
-        dto.setLastConnectedAt(deviceService.getLatestLastConnectionTime(agent.getId()));
+        // 首页展示的是“最近对话”，必须取聊天记录时间，不能用设备连接时间冒充。
+        dto.setLastConnectedAt(agentChatHistoryService.getLatestChatTimeByAgentId(agent.getId()));
 
         // 获取设备数量
         dto.setDeviceCount(getDeviceCountByAgentId(agent.getId()));
@@ -514,6 +517,10 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
                 && existingEntity.getMemModelId().equals(Constant.MEMORY_MEM_REPORT_ONLY)) {
             existingEntity.setSummaryMemory("");
         }
+        if (Constant.MEMORY_MEMME.equals(existingEntity.getMemModelId())
+                || Constant.MEMORY_MEM_REPORT_ONLY.equals(existingEntity.getMemModelId())) {
+            existingEntity.setChatHistoryConf(Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode());
+        }
 
         // 更新上下文源配置
         if (dto.getContextProviders() != null) {
@@ -632,9 +639,13 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
 
             // 根据记忆模型类型设置默认的chatHistoryConf值
             if (template.getMemModelId() != null) {
-                if (template.getMemModelId().equals("Memory_nomem")) {
+                if (Constant.MEMORY_NO_MEM.equals(template.getMemModelId())) {
                     // 无记忆功能的模型，默认不记录聊天记录
                     entity.setChatHistoryConf(0);
+                } else if (Constant.MEMORY_MEMME.equals(template.getMemModelId())
+                        || Constant.MEMORY_MEM_REPORT_ONLY.equals(template.getMemModelId())) {
+                    // 儿童长期记忆只允许文字，禁止模板打开原始音频上报
+                    entity.setChatHistoryConf(Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode());
                 } else {
                     // 有记忆功能的模型，默认记录文本和语音
                     entity.setChatHistoryConf(2);

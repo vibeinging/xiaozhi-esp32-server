@@ -44,6 +44,7 @@ from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils.util import get_system_error_response
 from core.utils import textUtils
+from core.utils.report_queue import drain_report_queue
 from core.safety import ChildContentSafetyPolicy, summarize_text_for_log
 
 
@@ -123,6 +124,8 @@ class ConnectionHandler:
         self.loop = None  # 在 handle_connection 中获取运行中的事件循环
         self.stop_event = threading.Event()
         self.executor = ThreadPoolExecutor(max_workers=5)
+        self._chat_futures = set()
+        self._chat_futures_lock = threading.Lock()
 
         # 添加上报线程池
         self.report_queue = queue.Queue()
@@ -341,6 +344,51 @@ class ConnectionHandler:
                 self.logger.bind(tag=TAG).error(
                     f"保存记忆后关闭连接失败: {close_error}"
                 )
+
+    async def _save_durable_memory_snapshot(self):
+        """增量保存当前快照；event_id 保证重复快照不会生成重复记忆。"""
+        if not self.memory or not getattr(self.memory, "requires_durable_save", False):
+            return
+        try:
+            await self.memory.save_memory(
+                list(self.dialogue.dialogue), self.session_id
+            )
+        except Exception as error:
+            self.logger.bind(tag=TAG).error(f"MemMe 增量保存失败: {error}")
+
+    async def submit_chat(self, query):
+        """先持久化用户消息，再提交聊天，并在回答完成后补一次快照。"""
+        self.dialogue.put(Message(role="user", content=query))
+        if self.memory and hasattr(self.memory, "enqueue_memory"):
+            try:
+                await self.memory.enqueue_memory(
+                    list(self.dialogue.dialogue), self.session_id
+                )
+            except Exception as error:
+                self.logger.bind(tag=TAG).error(f"MemMe 用户消息预入队失败: {error}")
+
+        future = self.executor.submit(self.chat, query, 0, True)
+        with self._chat_futures_lock:
+            self._chat_futures.add(future)
+
+        def on_done(done_future):
+            with self._chat_futures_lock:
+                self._chat_futures.discard(done_future)
+            try:
+                done_future.result()
+            except Exception as error:
+                self.logger.bind(tag=TAG).error(f"聊天任务失败: {error}")
+            if self.loop is None or self.loop.is_closed():
+                return
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._save_durable_memory_snapshot(), self.loop
+                )
+            except RuntimeError:
+                pass
+
+        future.add_done_callback(on_done)
+        return future
 
     async def _discard_message_with_bind_prompt(self):
         """丢弃消息并检查是否需要播放绑定提示"""
@@ -963,6 +1011,9 @@ class ConnectionHandler:
             device_id=self.device_id,
             session_id=self.session_id,
         )
+        if hasattr(self.memory, "ensure_global_worker") and self.loop is not None:
+            # 组件初始化在线程池内执行；把进程级重试任务安全地交回主事件循环。
+            self.loop.call_soon_threadsafe(self.memory.ensure_global_worker)
 
         # 获取记忆总结配置
         memory_config = self.config["Memory"]
@@ -1049,7 +1100,7 @@ class ConnectionHandler:
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
 
-    def chat(self, query, depth=0):
+    def chat(self, query, depth=0, user_message_recorded=False):
         # 保存当前任务的sentence_id到局部变量，避免被新任务覆盖
         current_sentence_id = None
 
@@ -1063,7 +1114,8 @@ class ConnectionHandler:
             current_sentence_id = str(uuid.uuid4().hex)
             self.sentence_id = current_sentence_id  # 更新共享属性
             self.current_user_query = str(query or "")
-            self.dialogue.put(Message(role="user", content=query))
+            if not user_message_recorded:
+                self.dialogue.put(Message(role="user", content=query))
             self.tts.tts_text_queue.put(
                 TTSMessageDTO(
                     sentence_id=current_sentence_id,
@@ -1153,7 +1205,8 @@ class ConnectionHandler:
         # 支持多个并行工具调用 - 使用列表存储
         tool_calls_list = []  # 格式: [{"id": "", "name": "", "arguments": ""}]
         content_arguments = ""
-        emotion_flag = True
+        emotion_sent = False
+        emotion_prefix = ""
         try:
             for response in llm_responses:
                 if self.client_abort:
@@ -1200,14 +1253,16 @@ class ConnectionHandler:
                 else:
                     content = response
 
-                # 在llm回复中获取情绪表情，一轮对话只在开头获取一次
-                if emotion_flag and content is not None and content.strip():
-                    if (self.features or {}).get("emoji", True):
+                # 模型的首个流式分片可能只有普通文字，情绪符号在后一个分片。
+                # 先累积一小段前缀，找到真正情绪后再发给眼睛，避免被过早固定为 neutral。
+                if not emotion_sent and content is not None and content.strip():
+                    emotion_prefix += content
+                    if (self.features or {}).get("emoji", True) and textUtils.should_emit_emotion(emotion_prefix):
                         asyncio.run_coroutine_threadsafe(
-                            textUtils.get_emotion(self, content),
+                            textUtils.get_emotion(self, emotion_prefix),
                             self.loop,
                         )
-                    emotion_flag = False
+                        emotion_sent = True
 
                 if content is not None and len(content) > 0:
                     if not tool_call_flag:
@@ -1239,6 +1294,15 @@ class ConnectionHandler:
                     )
                 )
             return
+        if (
+            not emotion_sent
+            and (self.features or {}).get("emoji", True)
+            and emotion_prefix.strip()
+        ):
+            asyncio.run_coroutine_threadsafe(
+                textUtils.get_emotion(self, emotion_prefix),
+                self.loop,
+            )
         # 处理function call
         if tool_call_flag:
             bHasError = False
@@ -1335,6 +1399,7 @@ class ConnectionHandler:
                 # 收集所有工具调用的 Future
                 futures_with_data = []
                 for tool_call_data in tool_calls_list:
+                    tool_call_data["_user_text"] = str(query or self.current_user_query)
                     argument_keys = self.content_safety.safe_tool_argument_keys(
                         tool_call_data.get("arguments")
                     )
@@ -1527,26 +1592,43 @@ class ConnectionHandler:
 
     def _report_worker(self):
         """聊天记录上报工作线程"""
-        while not self.stop_event.is_set():
-            try:
-                # 从队列获取数据，设置超时以便定期检查停止事件
-                item = self.report_queue.get(timeout=1)
-                if item is None:  # 检测毒丸对象
-                    break
-                try:
-                    # 检查线程池状态
-                    if self.executor is None:
-                        continue
-                    # 提交任务到线程池
-                    self.executor.submit(self._process_report, *item)
-                except Exception as e:
-                    self.logger.bind(tag=TAG).error(f"聊天记录上报线程异常: {e}")
-            except queue.Empty:
-                continue
-            except Exception as e:
-                self.logger.bind(tag=TAG).error(f"聊天记录上报工作线程异常: {e}")
-
+        drain_report_queue(
+            self.stop_event,
+            self.report_queue,
+            self._process_report,
+            self.logger,
+            TAG,
+        )
         self.logger.bind(tag=TAG).info("聊天记录上报线程已退出")
+
+    async def _wait_for_chat_tasks(self, timeout=1.5):
+        """短暂等待已提交的聊天任务，让最后一条回复有机会进入上报队列。"""
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            with self._chat_futures_lock:
+                pending = [future for future in self._chat_futures if not future.done()]
+            if not pending:
+                return True
+            if asyncio.get_running_loop().time() >= deadline:
+                self.logger.bind(tag=TAG).warning(
+                    f"关闭连接时仍有 {len(pending)} 个聊天任务未完成"
+                )
+                return False
+            await asyncio.sleep(0.05)
+
+    async def _flush_report_queue(self, timeout=3.0):
+        """在连接销毁前有界等待聊天记录上报，不丢弃已排队的最后几条。"""
+        if self.report_thread is None or not self.report_thread.is_alive():
+            return self.report_queue.unfinished_tasks == 0
+        deadline = asyncio.get_running_loop().time() + timeout
+        while self.report_queue.unfinished_tasks > 0:
+            if asyncio.get_running_loop().time() >= deadline:
+                self.logger.bind(tag=TAG).warning(
+                    f"聊天记录上报等待超时，剩余 {self.report_queue.unfinished_tasks} 条"
+                )
+                return False
+            await asyncio.sleep(0.05)
+        return True
 
     def _process_report(self, type, text, audio_data, report_time):
         """处理上报任务"""
@@ -1617,12 +1699,17 @@ class ConnectionHandler:
                         f"清理工具处理器时出错: {cleanup_error}"
                     )
 
-            # 触发停止事件
+            # 先给尾部聊天任务和已排队的记录一个有界的收尾时间。
+            # 原先这里先设停止事件、再清空 report_queue，会丢掉最后几条最近对话。
+            await self._wait_for_chat_tasks()
+            await self._flush_report_queue()
+
+            # 清理可丢弃的实时音频队列；聊天记录队列不在此处清理。
+            self.clear_queues()
+
+            # 触发停止事件，上报线程会继续处理完队列内已有数据。
             if self.stop_event:
                 self.stop_event.set()
-
-            # 清空任务队列
-            self.clear_queues()
 
             # 关闭WebSocket连接
             try:
@@ -1665,6 +1752,9 @@ class ConnectionHandler:
             if self.asr:
                 await self.asr.close()
 
+            if self.report_thread and self.report_thread.is_alive():
+                await asyncio.to_thread(self.report_thread.join, 0.5)
+
             # 最后关闭线程池（避免阻塞）
             if self.executor:
                 try:
@@ -1693,7 +1783,6 @@ class ConnectionHandler:
             for q in [
                 self.tts.tts_text_queue,
                 self.tts.tts_audio_queue,
-                self.report_queue,
             ]:
                 if not q:
                     continue

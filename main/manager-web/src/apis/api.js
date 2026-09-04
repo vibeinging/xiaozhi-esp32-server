@@ -13,6 +13,7 @@ import knowledgeBase from './module/knowledgeBase.js'
 import correctWord from './module/correctWord.js'
 import addressBook from './module/addressBook.js'
 import childSafety from './module/childSafety.js'
+import memory from './module/memory.js'
 
 
 
@@ -47,5 +48,6 @@ export default {
     knowledgeBase,
     correctWord,
     addressBook,
-    childSafety
+    childSafety,
+    memory
   }

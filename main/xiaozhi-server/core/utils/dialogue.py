@@ -1,6 +1,7 @@
 import uuid
 import re
 import html
+import time
 from typing import List, Dict
 from datetime import datetime
 
@@ -14,8 +15,10 @@ class Message:
             tool_calls=None,
             tool_call_id=None,
             is_temporary=False,
+            created_at=None,
     ):
         self.uniq_id = uniq_id if uniq_id is not None else str(uuid.uuid4())
+        self.created_at = time.time() if created_at is None else float(created_at)
         self.role = role
         self.content = content
         self.tool_calls = tool_calls

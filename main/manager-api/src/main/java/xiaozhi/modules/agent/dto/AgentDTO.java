@@ -42,7 +42,7 @@ public class AgentDTO {
             "根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String summaryMemory;
 
-    @Schema(description = "最后连接时间", example = "2024-03-20 10:00:00")
+    @Schema(description = "最近对话时间", example = "2024-03-20 10:00:00")
     private Date lastConnectedAt;
 
     @Schema(description = "设备数量", example = "10")

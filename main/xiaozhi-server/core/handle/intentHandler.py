@@ -146,6 +146,7 @@ async def process_intent_result(
                 "name": function_name,
                 "id": str(uuid.uuid4().hex),
                 "arguments": function_args,
+                "_user_text": original_text,
             }
 
             await send_stt_message(conn, original_text)

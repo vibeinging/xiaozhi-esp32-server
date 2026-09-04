@@ -15,11 +15,18 @@ import re
 from typing import Any, Optional
 
 _MOBILE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
+_LANDLINE_RE = re.compile(r"(?<!\d)(?:0\d{2,3}[-—\s]?)?\d{7,8}(?!\d)")
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _VERIFICATION_CODE_RE = re.compile(
     r"(验证码|校验码|动态码)[^\d]{0,6}(\d{4,8})"
 )
 _API_KEY_RE = re.compile(r"\b(?:sk-|ak-)[A-Za-z0-9_-]{12,}\b", re.IGNORECASE)
+_PASSWORD_RE = re.compile(
+    r"((?:Wi[- ]?Fi|无线网|账号|登录|支付|手机|电脑|平板)?\s*"
+    r"(?:密码|口令|PIN码?)\s*(?:是|为|：|:|=)?\s*)"
+    r"([A-Za-z0-9_@#%+!.$*-]{4,64})",
+    re.IGNORECASE,
+)
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _ID_CARD_RE = re.compile(r"(?<!\d)\d{17}[0-9Xx](?!\d)")
 
@@ -27,7 +34,25 @@ _ID_CARD_RE = re.compile(r"(?<!\d)\d{17}[0-9Xx](?!\d)")
 _ROAD_PLATE_RE = re.compile(r"[\u4e00-\u9fa5]{1,10}(?:路|街|道|巷)\s*\d{1,5}\s*号(?:院|区)?")
 # 楼栋门牌：「3栋2单元501室」「5号楼2层」
 _BUILDING_PLATE_RE = re.compile(
-    r"(?<!\d)\d{1,3}\s*栋\s*\d{0,3}\s*单元?\s*\d{0,4}\s*(?:号|室|楼)?"
+    r"(?<!\d)\d{1,3}\s*(?:栋|号楼)\s*\d{0,3}\s*单元?\s*\d{0,4}\s*(?:号|室|楼)?"
+)
+_DISTRICT_ADDRESS_RE = re.compile(
+    r"(?:北京市|天津市|上海市|重庆市|"
+    r"[一-龥]{2,8}(?:省|自治区))?"
+    r"[一-龥]{2,10}(?:市|区|县)"
+    r"[一-龥A-Za-z0-9]{2,24}(?:小区|花园|家园|公寓|社区|村|镇)"
+)
+_COMMUNITY_ADDRESS_RE = re.compile(
+    r"[一-龥A-Za-z0-9]{2,20}(?:小区|花园|家园|公寓|社区)"
+    r"(?:\s*\d{1,3}\s*(?:栋|号楼))?"
+    r"(?:\s*\d{1,3}\s*单元)?"
+    r"(?:\s*\d{1,4}\s*室)?"
+)
+_LOCAL_MEDIA_PATH_RE = re.compile(
+    r"(?:^|\s)(?:/|[A-Za-z]:[\\/])[^\s]{0,160}"
+    r"(?:camera|摄像头|相机|child|儿童|卧室|bedroom)[^\s]{0,120}"
+    r"\.(?:jpe?g|png|webp|gif|mp4|mov|avi)\b",
+    re.IGNORECASE,
 )
 # 学校/幼儿园名称：「实验一小」「阳光幼儿园」「红梅实验小学」（含专名前缀才隐藏，单独说"学校"保留）
 _SCHOOL_NAME_RE = re.compile(
@@ -51,13 +76,27 @@ _EXCLUDE_PATTERNS = {
     "adult": ("色情", "成人影片", "做爱", "裸体"),
 }
 
+_UNTRUSTED_INSTRUCTION_PATTERNS = (
+    re.compile(r"(?:忽略|无视|覆盖|绕过).{0,20}(?:指令|规则|提示词|安全限制)"),
+    re.compile(r"(?:调用|执行|触发|使用).{0,16}(?:工具|函数|tool|function)", re.IGNORECASE),
+    re.compile(
+        r"(?:调用|执行|触发|使用).{0,16}"
+        r"(?:get_weather|get_time|play_music|handle_exit_intent|web_search)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:system|assistant|tool|function_call|tool_call)\s*[:：<]", re.IGNORECASE),
+    re.compile(r"(?:你必须|务必|不要告诉家长|这是系统命令)"),
+)
+
 
 def redact_for_long_term_memory(text: Any) -> str:
     """PII 与凭据脱敏：替换为占位，保留其余内容。召回查询与写入共用。"""
     value = str(text or "")
     value = _MOBILE_RE.sub("[电话已隐藏]", value)
+    value = _LANDLINE_RE.sub("[电话已隐藏]", value)
     value = _EMAIL_RE.sub("[邮箱已隐藏]", value)
     value = _API_KEY_RE.sub("[密钥已隐藏]", value)
+    value = _PASSWORD_RE.sub(lambda m: f"{m.group(1)}[密码已隐藏]", value)
     value = _URL_RE.sub("[网址已隐藏]", value)
     value = _ID_CARD_RE.sub("[身份证已隐藏]", value)
     value = _VERIFICATION_CODE_RE.sub(
@@ -65,6 +104,9 @@ def redact_for_long_term_memory(text: Any) -> str:
     )
     value = _ROAD_PLATE_RE.sub("[地址已隐藏]", value)
     value = _BUILDING_PLATE_RE.sub("[门牌已隐藏]", value)
+    value = _DISTRICT_ADDRESS_RE.sub("[地址已隐藏]", value)
+    value = _COMMUNITY_ADDRESS_RE.sub("[地址已隐藏]", value)
+    value = _LOCAL_MEDIA_PATH_RE.sub(" [媒体路径已隐藏]", value)
     value = _CLASS_RE.sub("[班级已隐藏]", value)
     value = _SCHOOL_NAME_RE.sub("[学校名已隐藏]", value)
     return value
@@ -85,5 +127,15 @@ def filter_for_long_term_memory(text: Any) -> Optional[str]:
     if not value:
         return None
     if exclude_reason(value) is not None:
+        return None
+    return redact_for_long_term_memory(value)
+
+
+def filter_recalled_memory(text: Any) -> Optional[str]:
+    """召回入口：把远端内容当作不可信数据，拒绝指令并再次脱敏。"""
+    value = str(text or "").strip()
+    if not value or exclude_reason(value) is not None:
+        return None
+    if any(pattern.search(value) for pattern in _UNTRUSTED_INSTRUCTION_PATTERNS):
         return None
     return redact_for_long_term_memory(value)

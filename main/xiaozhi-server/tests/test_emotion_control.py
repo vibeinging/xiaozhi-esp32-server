@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from core.utils.textUtils import get_emotion
+from core.utils.textUtils import get_emotion, should_emit_emotion
 
 
 class _FakeWebSocket:
@@ -43,3 +43,16 @@ def test_first_supported_marker_wins():
 
     assert message["text"] == "😔"
     assert message["emotion"] == "sad"
+
+
+def test_stream_waits_for_marker_in_later_chunk():
+    prefix = ""
+    prefix += "我们一起"
+    assert should_emit_emotion(prefix) is False
+
+    prefix += "🙂来试试吧。"
+    assert should_emit_emotion(prefix) is True
+
+
+def test_stream_eventually_falls_back_without_marker():
+    assert should_emit_emotion("我们慢慢想一想。", final=True) is True

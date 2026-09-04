@@ -357,10 +357,12 @@ Memory:
     queue_path: data/memme-retry.sqlite3
     request_timeout_seconds: 3
     retry_batch_size: 2
+    retry_poll_seconds: 1
     retry_base_seconds: 10
     retry_max_seconds: 3600
     queue_max_jobs: 10000
     queue_max_bytes: 268435456
+    dead_letter_max_jobs: 1000
     recall_limit: 5
     recall_max_chars: 4000
     # 没有给 MemMe 配置 LLM 时保持 false；原始事件仍可立即召回。

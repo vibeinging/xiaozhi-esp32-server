@@ -177,6 +177,9 @@ public class ConfigServiceImpl implements ConfigService {
         Integer chatHistoryConf = agent.getChatHistoryConf();
         if (agent.getMemModelId() != null && agent.getMemModelId().equals(Constant.MEMORY_NO_MEM)) {
             chatHistoryConf = Constant.ChatHistoryConfEnum.IGNORE.getCode();
+        } else if (Constant.MEMORY_MEMME.equals(agent.getMemModelId())
+                || Constant.MEMORY_MEM_REPORT_ONLY.equals(agent.getMemModelId())) {
+            chatHistoryConf = Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode();
         } else if (agent.getMemModelId() != null
                 && !agent.getMemModelId().equals(Constant.MEMORY_NO_MEM)
                 && agent.getChatHistoryConf() == null) {

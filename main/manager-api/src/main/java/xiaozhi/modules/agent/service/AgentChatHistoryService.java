@@ -1,5 +1,6 @@
 package xiaozhi.modules.agent.service;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +37,14 @@ public interface AgentChatHistoryService extends IRepository<AgentChatHistoryEnt
      * @return 聊天记录列表
      */
     List<AgentChatHistoryDTO> getChatHistoryBySessionId(String agentId, String sessionId);
+
+    /**
+     * 获取智能体最近一条真实对话的时间。
+     *
+     * @param agentId 智能体ID
+     * @return 最近对话时间，无记录时返回 null
+     */
+    Date getLatestChatTimeByAgentId(String agentId);
 
     /**
      * 根据会话ID获取智能体ID

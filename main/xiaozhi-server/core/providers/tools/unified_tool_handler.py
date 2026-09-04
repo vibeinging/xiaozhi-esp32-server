@@ -154,7 +154,12 @@ class UnifiedToolHandler:
             if "function_calls" in function_call_data:
                 responses = []
                 for call in function_call_data["function_calls"]:
-                    if not self.conn.content_safety.can_execute_tool(call["name"]):
+                    if not self.conn.content_safety.can_execute_tool(
+                        call["name"],
+                        call.get(
+                            "_user_text", getattr(self.conn, "current_user_query", "")
+                        ),
+                    ):
                         responses.append(
                             ActionResponse(
                                 action=Action.RESPONSE,
@@ -172,7 +177,12 @@ class UnifiedToolHandler:
             function_name = function_call_data["name"]
             arguments = function_call_data.get("arguments", {})
 
-            if not self.conn.content_safety.can_execute_tool(function_name):
+            if not self.conn.content_safety.can_execute_tool(
+                function_name,
+                function_call_data.get(
+                    "_user_text", getattr(self.conn, "current_user_query", "")
+                ),
+            ):
                 self.logger.warning(
                     f"儿童内容安全已阻止工具: function_name={function_name}"
                 )

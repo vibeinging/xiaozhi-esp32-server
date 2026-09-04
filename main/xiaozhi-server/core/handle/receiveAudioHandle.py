@@ -118,6 +118,9 @@ async def startToChat(conn: "ConnectionHandler", text):
         )
         return
 
+    # 意图识别可能直接调用工具，必须在进入意图模块前绑定本轮原始问题。
+    conn.current_user_query = actual_text
+
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)
 
@@ -131,7 +134,7 @@ async def startToChat(conn: "ConnectionHandler", text):
     # 准备开始新会话
     conn.client_abort = False
 
-    conn.executor.submit(conn.chat, actual_text)
+    await conn.submit_chat(actual_text)
 
 
 async def no_voice_close_connect(conn: "ConnectionHandler", have_voice):

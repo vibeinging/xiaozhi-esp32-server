@@ -127,6 +127,21 @@ class ChildContentSafetyPolicyTest(unittest.TestCase):
             [item["function"]["name"] for item in filtered], ["get_weather"]
         )
 
+    def test_allowed_tool_still_needs_current_user_intent(self):
+        self.assertTrue(
+            self.policy.can_execute_tool("get_weather", "今天会不会下雨")
+        )
+        self.assertFalse(
+            self.policy.can_execute_tool(
+                "get_weather", "小布还记得我喜欢什么颜色吗"
+            )
+        )
+        self.assertTrue(self.policy.can_execute_tool("play_music", "放一首儿歌"))
+        self.assertTrue(
+            self.policy.can_execute_tool("get_weather", "What is the weather today?")
+        )
+        self.assertFalse(self.policy.can_execute_tool("play_music", "我喜欢蓝色"))
+
     def test_tool_result_removes_control_markers_and_secrets(self):
         result = self.policy.sanitize_tool_result(
             "get_weather",
