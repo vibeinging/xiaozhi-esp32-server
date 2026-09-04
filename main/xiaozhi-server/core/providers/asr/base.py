@@ -14,7 +14,7 @@ import threading
 from abc import ABC, abstractmethod
 from config.logger import setup_logging
 from core.providers.asr.dto.dto import InterfaceType
-from core.handle.receiveAudioHandle import startToChat
+from core.handle.receiveAudioHandle import is_wakeup_word, startToChat
 from core.safety import summarize_text_for_log
 from core.handle.reportHandle import enqueue_asr_report
 from core.utils.util import remove_punctuation_and_length
@@ -84,6 +84,10 @@ class ASRProviderBase(ABC):
     # 处理语音停止
     async def handle_voice_stop(self, conn: "ConnectionHandler", asr_audio_task: List[bytes]):
         """并行处理ASR和声纹识别"""
+        input_started_while_speaking = bool(
+            getattr(conn, "asr_started_while_speaking", False)
+        )
+        conn.asr_started_while_speaking = False
         try:
             total_start_time = time.monotonic()
 
@@ -170,9 +174,19 @@ class ASRProviderBase(ABC):
 
             if text_len > 0:
                 audio_snapshot = asr_audio_task.copy()
-                enqueue_asr_report(conn, enhanced_text, audio_snapshot)
-                # 使用自定义模块进行上报
-                await startToChat(conn, enhanced_text)
+                overlapped_speaking = (
+                    input_started_while_speaking or conn.client_is_speaking
+                )
+                # 普通插话既不送进模型，也不写入聊天记录；唤醒词仍保留记录。
+                if not overlapped_speaking or is_wakeup_word(
+                    conn, content_for_length_check
+                ):
+                    enqueue_asr_report(conn, enhanced_text, audio_snapshot)
+                await startToChat(
+                    conn,
+                    enhanced_text,
+                    input_started_while_speaking=overlapped_speaking,
+                )
         except Exception as e:
             logger.bind(tag=TAG).error(f"处理语音停止失败: {e}")
             import traceback

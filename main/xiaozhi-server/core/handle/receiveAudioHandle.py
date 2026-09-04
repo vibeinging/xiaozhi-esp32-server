@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.connection import ConnectionHandler
-from core.utils.util import audio_to_data
+from core.utils.util import audio_to_data, remove_punctuation_and_length
 from core.handle.abortHandle import handleAbortMessage
 from core.handle.intentHandler import handle_user_intent, speak_txt
 from core.utils.output_counter import check_device_output_limit
@@ -27,10 +27,10 @@ async def handleAudioMessage(conn: "ConnectionHandler", pcm_frame):
         if not hasattr(conn, "vad_resume_task") or conn.vad_resume_task.done():
             conn.vad_resume_task = asyncio.create_task(resume_vad_detection(conn))
         return
-    # 服务端AEC功能需要实时触发打断
-    if conn.client_aec and have_voice:
-        if conn.client_is_speaking and conn.client_listen_mode != "manual":
-            await handleAbortMessage(conn)
+    # 播报期间检测到人声时继续做 ASR，但不再立即打断。识别出完整文字后，
+    # 只有唤醒词可以中止播报；普通插话不会进入 LLM。
+    if have_voice and conn.client_is_speaking:
+        conn.asr_started_while_speaking = True
     # 设备长时间空闲检测，用于say goodbye
     await no_voice_close_connect(conn, have_voice)
     # 接收音频
@@ -43,7 +43,24 @@ async def resume_vad_detection(conn: "ConnectionHandler"):
     conn.just_woken_up = False
 
 
-async def startToChat(conn: "ConnectionHandler", text):
+def is_wakeup_word(conn: "ConnectionHandler", text) -> bool:
+    _, filtered_text = remove_punctuation_and_length(str(text or ""))
+    if not filtered_text:
+        return False
+
+    config = getattr(conn, "config", {}) or {}
+    for wakeup_word in config.get("wakeup_words", []) or []:
+        _, filtered_wakeup_word = remove_punctuation_and_length(
+            str(wakeup_word or "")
+        )
+        if filtered_text == filtered_wakeup_word:
+            return True
+    return False
+
+
+async def startToChat(
+    conn: "ConnectionHandler", text, input_started_while_speaking=False
+):
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     actual_text = text
@@ -80,6 +97,23 @@ async def startToChat(conn: "ConnectionHandler", text):
         await check_bind_device(conn)
         return
 
+    # 播报期间的普通说话不抢话、不进入模型；说出唤醒词才立即停止播报，
+    # 设备收到 stop 后会回到聆听状态，等待用户继续说指令。
+    overlapped_speaking = (
+        input_started_while_speaking or conn.client_is_speaking
+    )
+    if overlapped_speaking:
+        if not is_wakeup_word(conn, safety_text):
+            conn.logger.bind(tag=TAG).info("忽略播报期间的非唤醒词语音")
+            return
+
+        if conn.client_is_speaking:
+            await handleAbortMessage(conn)
+        conn.just_woken_up = True
+        await send_stt_message(conn, safety_text)
+        conn.logger.bind(tag=TAG).info("唤醒词已主动打断播报")
+        return
+
     # 如果当日的输出字数大于限定的字数
     if conn.max_output_size > 0:
         if check_device_output_limit(
@@ -87,10 +121,6 @@ async def startToChat(conn: "ConnectionHandler", text):
         ):
             await max_out_size(conn)
             return
-
-    # manual 模式下不打断正在播放的内容
-    if conn.client_is_speaking and conn.client_listen_mode != "manual":
-        await handleAbortMessage(conn)
 
     # 儿童模式的高风险输入在任何工具和 LLM 之前处理。
     safety_decision = conn.content_safety.evaluate_input(safety_text)
