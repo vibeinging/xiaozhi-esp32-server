@@ -466,9 +466,15 @@ class MemoryProvider(MemoryProviderBase):
                 """,
                 (user_id, now, 1 if block_future else 0),
             )
-            rows = connection.execute("SELECT id, payload FROM memme_jobs").fetchall()
+            rows = connection.execute(
+                "SELECT id, payload, status FROM memme_jobs"
+            ).fetchall()
             delete_ids = []
             for row in rows:
+                # 正在上传的任务必须保留到它自己结束。删除流程会等待它，
+                # 然后再发远端 DELETE，保证删除请求一定排在旧写入之后。
+                if row["status"] == "processing":
+                    continue
                 try:
                     payload = json.loads(row["payload"])
                 except (TypeError, json.JSONDecodeError):
@@ -480,6 +486,29 @@ class MemoryProvider(MemoryProviderBase):
                 [(job_id,) for job_id in delete_ids],
             )
         return now
+
+    def _has_processing_user_jobs(self, user_id: str) -> bool:
+        with self._connect_queue() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM memme_jobs WHERE status = 'processing'"
+            ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict) and payload.get("user_id") == user_id:
+                return True
+        return False
+
+    async def _wait_for_processing_user_jobs(self, user_id: str) -> None:
+        deadline = asyncio.get_running_loop().time() + self.request_timeout + 2
+        while await asyncio.to_thread(self._has_processing_user_jobs, user_id):
+            if asyncio.get_running_loop().time() >= deadline:
+                # 宁可让本次删除返回失败并保留 tombstone，也不能在旧写入仍
+                # 可能完成时提前删除，再让迟到写入把记忆重新创建出来。
+                raise RuntimeError("MemMe deletion is waiting for an in-flight write")
+            await asyncio.sleep(0.05)
 
     def _allow_future_writes(self, user_id: str) -> None:
         with self._connect_queue() as connection:
@@ -687,6 +716,14 @@ class MemoryProvider(MemoryProviderBase):
             raise PermanentMemMeError("MemMe response is missing data")
         return envelope["data"]
 
+    async def _delete_remote_user(self, user_id: str) -> Any:
+        encoded_user_id = quote(user_id, safe="")
+        return await self._post_json(
+            f"/v1/users/{encoded_user_id}",
+            {"confirm_user_id": user_id},
+            method="DELETE",
+        )
+
     def _events_payload(
         self, msgs, session_id: str, cutoff: Optional[float] = None
     ) -> Optional[Dict[str, Any]]:
@@ -810,19 +847,22 @@ class MemoryProvider(MemoryProviderBase):
                 raise PermanentMemMeError("invalid queued payload")
             if kind == "events":
                 payload = self._sanitize_queued_events(payload)
+                user_id = str(payload["user_id"])
+                agent_id = str(payload["agent_id"])
+                app_id = str(payload["app_id"])
                 cutoff = await asyncio.to_thread(
                     self._scope_cutoff,
-                    str(payload["user_id"]),
-                    str(payload["agent_id"]),
-                    str(payload["app_id"]),
+                    user_id,
+                    agent_id,
+                    app_id,
                 )
                 if cutoff is not None and float(row["created_at"]) <= cutoff:
                     return await asyncio.to_thread(self._finish_job, job_id)
                 if await asyncio.to_thread(
                     self._is_scope_tombstoned,
-                    str(payload["user_id"]),
-                    str(payload["agent_id"]),
-                    str(payload["app_id"]),
+                    user_id,
+                    agent_id,
+                    app_id,
                 ):
                     return await asyncio.to_thread(self._finish_job, job_id)
                 await asyncio.to_thread(
@@ -834,6 +874,17 @@ class MemoryProvider(MemoryProviderBase):
                 pending = self._validate_events_result(
                     result, len(payload["messages"])
                 )
+                latest_cutoff = await asyncio.to_thread(
+                    self._scope_cutoff, user_id, agent_id, app_id
+                )
+                is_tombstoned = await asyncio.to_thread(
+                    self._is_scope_tombstoned, user_id, agent_id, app_id
+                )
+                if (
+                    latest_cutoff is not None
+                    and float(row["created_at"]) <= latest_cutoff
+                ) or is_tombstoned:
+                    return await asyncio.to_thread(self._finish_job, job_id)
                 if pending:
                     await asyncio.to_thread(
                         self._mark_failed,
@@ -964,12 +1015,8 @@ class MemoryProvider(MemoryProviderBase):
         await asyncio.to_thread(
             self._tombstone_user_and_purge_queue, user_id, True
         )
-        encoded_user_id = quote(user_id, safe="")
-        result = await self._post_json(
-            f"/v1/users/{encoded_user_id}",
-            {"confirm_user_id": user_id},
-            method="DELETE",
-        )
+        await self._wait_for_processing_user_jobs(user_id)
+        result = await self._delete_remote_user(user_id)
         if allow_future:
             await asyncio.to_thread(self._allow_future_writes, user_id)
         return result

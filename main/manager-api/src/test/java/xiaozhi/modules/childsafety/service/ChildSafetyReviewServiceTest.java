@@ -195,4 +195,26 @@ class ChildSafetyReviewServiceTest {
         assertTrue(conversation.getValue().contains("LATEST_MARKER"));
         assertFalse(conversation.getValue().contains("OLDEST_MARKER"));
     }
+
+    @Test
+    void cleanupStillAppliesAfterReviewIsDisabled() {
+        ChildSafetySettingDao settingDao = mock(ChildSafetySettingDao.class);
+        AgentChatHistoryService historyService = mock(AgentChatHistoryService.class);
+        ChildSafetySettingEntity setting = new ChildSafetySettingEntity();
+        setting.setAgentId("agent-disabled");
+        setting.setEnabled(false);
+        setting.setChatRetentionDays(7);
+        setting.setReportRetentionDays(90);
+        when(settingDao.selectList(org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(List.of(setting));
+
+        ChildSafetyReviewService service = new ChildSafetyReviewService(
+                settingDao, mock(ChildSafetyReviewDao.class), mock(ChildSafetyEventDao.class),
+                mock(AgentService.class), historyService, mock(LLMService.class));
+
+        service.cleanupExpiredData();
+
+        verify(historyService).deleteBefore(
+                org.mockito.ArgumentMatchers.eq("agent-disabled"), any(Date.class));
+    }
 }

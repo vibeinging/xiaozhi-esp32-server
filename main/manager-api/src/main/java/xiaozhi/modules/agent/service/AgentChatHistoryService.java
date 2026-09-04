@@ -63,6 +63,9 @@ public interface AgentChatHistoryService extends IRepository<AgentChatHistoryEnt
      */
     void deleteByAgentId(String agentId, Boolean deleteAudio, Boolean deleteText);
 
+    /** 删除指定时间之前的聊天文字和对应音频。 */
+    void deleteBefore(String agentId, Date cutoff);
+
     /**
      * 根据智能体ID获取最近50条用户的聊天记录数据（带音频数据）
      *

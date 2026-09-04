@@ -524,6 +524,51 @@ def test_user_delete_purges_queue_and_blocks_future_writeback(tmp_path):
     assert asyncio.run(provider.query_memory("喜欢什么")) == ""
 
 
+def test_user_delete_compensates_for_inflight_event_write(tmp_path):
+    provider = MemoryProvider(_config(tmp_path))
+    event_started = asyncio.Event()
+    release_event = asyncio.Event()
+    requests = []
+
+    async def fake_post(path, payload=None, method="POST"):
+        requests.append((method, path))
+        if path == "/v1/events":
+            event_started.set()
+            await release_event.wait()
+            return {
+                "events_appended": 1,
+                "events_replayed": 0,
+                "embedding_pending": 0,
+            }
+        return {"deleted": True}
+
+    provider._post_json = fake_post
+
+    async def race_delete_against_write():
+        save_task = asyncio.create_task(
+            provider.save_memory(
+                [Message("user", "删除时仍在上传", uniq_id="racing-event")],
+                "racing-session",
+            )
+        )
+        await event_started.wait()
+        delete_task = asyncio.create_task(
+            provider.delete_user_data("family-1", allow_future=True)
+        )
+        await asyncio.sleep(0.06)
+        assert not delete_task.done()
+        release_event.set()
+        await asyncio.gather(save_task, delete_task)
+
+    asyncio.run(race_delete_against_write())
+
+    assert requests == [
+        ("POST", "/v1/events"),
+        ("DELETE", "/v1/users/family-1"),
+    ]
+    assert provider._pending_job_count() == 0
+
+
 def test_legacy_unscoped_compact_job_is_not_sent(tmp_path):
     calls = []
     provider = MemoryProvider(_config(tmp_path))

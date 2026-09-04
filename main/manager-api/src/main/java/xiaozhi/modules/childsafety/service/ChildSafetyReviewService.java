@@ -176,12 +176,20 @@ public class ChildSafetyReviewService {
                         .orderByDesc(ChildSafetyReviewEntity::getReviewDate)
                         .last("LIMIT 60"));
 
+        long unreadEvents = eventDao.selectCount(
+                new LambdaQueryWrapper<ChildSafetyEventEntity>()
+                        .eq(ChildSafetyEventEntity::getOwnerUserId, ownerUserId)
+                        .isNull(ChildSafetyEventEntity::getReadAt));
+        long unreadReviews = reviewDao.selectCount(
+                new LambdaQueryWrapper<ChildSafetyReviewEntity>()
+                        .eq(ChildSafetyReviewEntity::getOwnerUserId, ownerUserId)
+                        .isNull(ChildSafetyReviewEntity::getReadAt)
+                        .in(ChildSafetyReviewEntity::getStatus, "COMPLETED", "FAILED"));
+
         ChildSafetyDashboardDTO result = new ChildSafetyDashboardDTO();
         result.setEvents(events.stream().map(this::toEventView).toList());
         result.setReviews(reviews.stream().map(this::toReviewView).toList());
-        result.setUnreadCount(events.stream().filter(item -> item.getReadAt() == null).count()
-                + reviews.stream().filter(item -> item.getReadAt() == null
-                        && Set.of("COMPLETED", "FAILED").contains(item.getStatus())).count());
+        result.setUnreadCount(unreadEvents + unreadReviews);
         return result;
     }
 
@@ -267,9 +275,8 @@ public class ChildSafetyReviewService {
 
     @Scheduled(cron = "0 20 3 * * *", zone = DEFAULT_TIMEZONE)
     public void cleanupExpiredData() {
-        List<ChildSafetySettingEntity> settings = settingDao.selectList(
-                new LambdaQueryWrapper<ChildSafetySettingEntity>()
-                        .eq(ChildSafetySettingEntity::getEnabled, true));
+        // 关闭复查只停止生成新报告，既有数据仍必须遵守用户已设置的保留期限。
+        List<ChildSafetySettingEntity> settings = settingDao.selectList(null);
         Date now = new Date();
         for (ChildSafetySettingEntity setting : settings) {
             try {
@@ -277,9 +284,7 @@ public class ChildSafetyReviewService {
                 long reportMillis = (long) Objects.requireNonNullElse(setting.getReportRetentionDays(), 90) * 86_400_000L;
                 Date chatCutoff = new Date(now.getTime() - chatMillis);
                 Date reportCutoff = new Date(now.getTime() - reportMillis);
-                chatHistoryService.remove(new LambdaQueryWrapper<AgentChatHistoryEntity>()
-                        .eq(AgentChatHistoryEntity::getAgentId, setting.getAgentId())
-                        .lt(AgentChatHistoryEntity::getCreatedAt, chatCutoff));
+                chatHistoryService.deleteBefore(setting.getAgentId(), chatCutoff);
                 reviewDao.delete(new LambdaQueryWrapper<ChildSafetyReviewEntity>()
                         .eq(ChildSafetyReviewEntity::getAgentId, setting.getAgentId())
                         .lt(ChildSafetyReviewEntity::getReviewEndAt, reportCutoff));

@@ -52,4 +52,10 @@ public interface AgentDao extends BaseDao<AgentEntity> {
      * @return 受影响行数
      */
     int updateSnapshotFields(@Param("agent") AgentEntity agent);
+
+    void deleteChildSafetyEventsByAgentId(@Param("agentId") String agentId);
+
+    void deleteChildSafetyReviewsByAgentId(@Param("agentId") String agentId);
+
+    void deleteChildSafetySettingByAgentId(@Param("agentId") String agentId);
 }

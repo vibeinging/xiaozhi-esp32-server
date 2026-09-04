@@ -338,8 +338,12 @@ class TTSProvider(TTSProviderBase):
                     break
         except asyncio.CancelledError:
             raise
-        except websockets.ConnectionClosed:
-            pass
+        except websockets.ConnectionClosed as exc:
+            self._response_error = f"connection closed before response completed: {exc}"
+            self._responses_done.set()
+            logger.bind(tag=TAG).warning(
+                "Qwen3 实时 TTS 连接在音频完成前关闭"
+            )
         except Exception as exc:
             self._response_error = str(exc)
             self._responses_done.set()

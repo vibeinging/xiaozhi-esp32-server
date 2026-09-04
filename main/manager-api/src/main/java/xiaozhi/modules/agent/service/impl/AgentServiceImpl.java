@@ -218,6 +218,9 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
         if (agentDao.selectByIdForUpdate(agentId) == null) {
             return;
         }
+        agentDao.deleteChildSafetyEventsByAgentId(agentId);
+        agentDao.deleteChildSafetyReviewsByAgentId(agentId);
+        agentDao.deleteChildSafetySettingByAgentId(agentId);
         deviceService.deleteByAgentId(agentId);
         agentChatHistoryService.deleteByAgentId(agentId, true, true);
         agentPluginMappingService.deleteByAgentId(agentId);

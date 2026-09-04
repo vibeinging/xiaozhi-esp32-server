@@ -123,6 +123,7 @@ class ConnectionHandler:
         # 线程任务相关
         self.loop = None  # 在 handle_connection 中获取运行中的事件循环
         self.stop_event = threading.Event()
+        self._closing_event = threading.Event()
         self.executor = ThreadPoolExecutor(max_workers=5)
         self._chat_futures = set()
         self._chat_futures_lock = threading.Lock()
@@ -283,6 +284,7 @@ class ConnectionHandler:
 
     async def _save_and_close(self, ws):
         """保存记忆并关闭连接"""
+        self._closing_event.set()
         try:
             # 守护线程1：独立生成标题（不依赖记忆模型）
             if self.session_id:
@@ -305,6 +307,8 @@ class ConnectionHandler:
 
             # 记忆保存（仅记忆，不含标题）
             if self.memory:
+                # 让已经开始的回复先看到关闭信号并停止修改对话，再保存最终快照。
+                await self._wait_for_chat_tasks()
                 # MemMe 要求先把任务写入本地 SQLite 队列。这一步必须
                 # 在连接对象销毁前完成，不能交给可能随进程退出的守护线程。
                 if getattr(self.memory, "requires_durable_save", False):
@@ -358,6 +362,9 @@ class ConnectionHandler:
 
     async def submit_chat(self, query):
         """先持久化用户消息，再提交聊天，并在回答完成后补一次快照。"""
+        if self._closing_event.is_set() or self.stop_event.is_set():
+            self.logger.bind(tag=TAG).warning("连接正在关闭，忽略新的聊天任务")
+            return None
         self.dialogue.put(Message(role="user", content=query))
         if self.memory and hasattr(self.memory, "enqueue_memory"):
             try:
@@ -378,7 +385,11 @@ class ConnectionHandler:
                 done_future.result()
             except Exception as error:
                 self.logger.bind(tag=TAG).error(f"聊天任务失败: {error}")
-            if self.loop is None or self.loop.is_closed():
+            if (
+                self._closing_event.is_set()
+                or self.loop is None
+                or self.loop.is_closed()
+            ):
                 return
             try:
                 asyncio.run_coroutine_threadsafe(
@@ -1119,6 +1130,8 @@ class ConnectionHandler:
         self.dialogue.update_system_message(self.prompt)
 
     def chat(self, query, depth=0, user_message_recorded=False):
+        if self._closing_event.is_set() or self.stop_event.is_set():
+            return None
         # 保存当前任务的sentence_id到局部变量，避免被新任务覆盖
         current_sentence_id = None
 
@@ -1187,6 +1200,8 @@ class ConnectionHandler:
                     self.memory.query_memory(query), self.loop
                 )
                 memory_str = future.result()
+                if self._closing_event.is_set() or self.stop_event.is_set():
+                    return None
 
             # 仅在该说话人首次出现时把身份注入 system，之后靠对话历史首轮保留，
             # 避免每轮在 system 重复出现名字诱导模型反复称呼
@@ -1227,7 +1242,11 @@ class ConnectionHandler:
         emotion_prefix = ""
         try:
             for response in llm_responses:
-                if self.client_abort:
+                if (
+                    self.client_abort
+                    or self._closing_event.is_set()
+                    or self.stop_event.is_set()
+                ):
                     break
                 if self.intent_type == "function_call" and functions is not None:
                     content, tools_call = response
@@ -1294,6 +1313,8 @@ class ConnectionHandler:
                             )
                         )
         except Exception as e:
+            if self._closing_event.is_set() or self.stop_event.is_set():
+                return None
             self.logger.bind(tag=TAG).error(f"LLM stream processing error: {e}")
             self.tts.tts_text_queue.put(
                 TTSMessageDTO(
@@ -1312,6 +1333,8 @@ class ConnectionHandler:
                     )
                 )
             return
+        if self._closing_event.is_set() or self.stop_event.is_set():
+            return None
         if (
             not emotion_sent
             and (self.features or {}).get("emoji", True)
@@ -1417,6 +1440,8 @@ class ConnectionHandler:
                 # 收集所有工具调用的 Future
                 futures_with_data = []
                 for tool_call_data in tool_calls_list:
+                    if self._closing_event.is_set() or self.stop_event.is_set():
+                        return None
                     tool_call_data["_user_text"] = str(query or self.current_user_query)
                     argument_keys = self.content_safety.safe_tool_argument_keys(
                         tool_call_data.get("arguments")
@@ -1445,6 +1470,9 @@ class ConnectionHandler:
                 tool_results = []
 
                 for future, tool_call_data, tool_input in futures_with_data:
+                    if self._closing_event.is_set() or self.stop_event.is_set():
+                        future.cancel()
+                        return None
                     try:
                         result = future.result(timeout=tool_call_timeout)
                         tool_results.append((result, tool_call_data))
@@ -1665,7 +1693,12 @@ class ConnectionHandler:
 
     async def close(self, ws=None):
         """资源清理方法"""
+        self._closing_event.set()
         try:
+            # 先让聊天线程看到关闭信号，避免它在资源清理期间继续使用工具、
+            # 写入对话、TTS 或长期记忆。
+            await self._wait_for_chat_tasks()
+
             # 清理 VAD 连接资源
             if (
                     hasattr(self, "vad")
@@ -1719,7 +1752,6 @@ class ConnectionHandler:
 
             # 先给尾部聊天任务和已排队的记录一个有界的收尾时间。
             # 原先这里先设停止事件、再清空 report_queue，会丢掉最后几条最近对话。
-            await self._wait_for_chat_tasks()
             await self._flush_report_queue()
 
             # 清理可丢弃的实时音频队列；聊天记录队列不在此处清理。

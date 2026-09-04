@@ -1,5 +1,9 @@
+import asyncio
 import json
+import threading
 import unittest
+
+import websockets
 
 from core.providers.asr.qwen3_asr_realtime import ASRProvider
 from core.providers.bailian_realtime import build_realtime_ws_url
@@ -12,6 +16,11 @@ class FakeWebSocket:
 
     async def send(self, message):
         self.messages.append(json.loads(message))
+
+
+class ClosedWebSocket:
+    async def recv(self):
+        raise websockets.ConnectionClosed(None, None)
 
 
 class BailianRealtimeUrlTest(unittest.TestCase):
@@ -57,6 +66,59 @@ class BailianRealtimeAsrTest(unittest.IsolatedAsyncioTestCase):
             [message["type"] for message in provider.asr_ws.messages],
             ["input_audio_buffer.commit"],
         )
+        self.assertIsNotNone(provider._commit_deadline)
+
+    async def test_audio_is_not_buffered_after_commit(self):
+        provider = ASRProvider(
+            {
+                "api_key": "test-key",
+                "base_url": "https://example.test/compatible-mode/v1",
+            },
+            True,
+        )
+        provider.input_committed = True
+
+        class Conn:
+            asr_audio = [b"before"]
+
+        conn = Conn()
+        await provider.receive_audio(conn, b"after", True)
+
+        self.assertEqual(conn.asr_audio, [b"before"])
+
+    async def test_audio_buffer_is_bounded(self):
+        provider = ASRProvider(
+            {
+                "api_key": "test-key",
+                "base_url": "https://example.test/compatible-mode/v1",
+                "sample_rate": 10,
+                "max_buffer_seconds": 1,
+            },
+            True,
+        )
+
+        class Conn:
+            asr_audio = [b"a" * 12, b"b" * 12]
+
+        conn = Conn()
+        provider._trim_audio_buffer(conn)
+
+        self.assertEqual(conn.asr_audio, [b"b" * 12])
+
+    async def test_final_result_deadline_stops_waiting(self):
+        provider = ASRProvider(
+            {
+                "api_key": "test-key",
+                "base_url": "https://example.test/compatible-mode/v1",
+            },
+            True,
+        )
+        provider.asr_ws = FakeWebSocket()
+        provider.input_committed = True
+        provider._commit_deadline = 0
+
+        with self.assertRaises(asyncio.TimeoutError):
+            await provider._recv_result_event()
 
 
 class BailianRealtimeTtsTest(unittest.IsolatedAsyncioTestCase):
@@ -81,6 +143,18 @@ class BailianRealtimeTtsTest(unittest.IsolatedAsyncioTestCase):
             ["input_text_buffer.append", "input_text_buffer.commit"],
         )
         self.assertEqual(provider._pending_responses, 1)
+
+    async def test_closed_connection_ends_pending_audio_wait_immediately(self):
+        provider = self.make_provider()
+        provider.ws = ClosedWebSocket()
+        provider.conn = type("Conn", (), {"stop_event": threading.Event()})()
+        provider._pending_responses = 1
+        provider._responses_done.clear()
+
+        await provider._monitor_response()
+
+        self.assertTrue(provider._responses_done.is_set())
+        self.assertIn("connection closed", provider._response_error)
 
     async def test_first_comma_starts_audio_segment_without_waiting_for_full_reply(
         self,

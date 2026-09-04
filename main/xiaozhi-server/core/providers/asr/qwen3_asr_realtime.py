@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import math
 
 import websockets
 
@@ -32,17 +33,36 @@ class ASRProvider(ASRProviderBase):
         )
         self.output_dir = config.get("output_dir", "tmp/")
         self.delete_audio_file = delete_audio_file
+        self.final_result_timeout = float(
+            config.get("final_result_timeout_seconds", 8)
+        )
+        if (
+            not math.isfinite(self.final_result_timeout)
+            or self.final_result_timeout <= 0
+        ):
+            raise ValueError(
+                "final_result_timeout_seconds must be a positive finite number"
+            )
+        self.max_buffer_bytes = max(
+            self.sample_rate * 2,
+            int(float(config.get("max_buffer_seconds", 30)) * self.sample_rate * 2),
+        )
 
         self.asr_ws = None
         self.forward_task = None
         self.is_processing = False
         self.server_ready = False
         self.input_committed = False
+        self._commit_deadline = None
         self.text = ""
         self._cleanup_lock = asyncio.Lock()
 
     async def receive_audio(self, conn, pcm_frame, audio_have_voice):
+        # commit 后只等最终文字，不再把后续环境音塞进当前句子的缓存。
+        if self.input_committed:
+            return
         await super().receive_audio(conn, pcm_frame, audio_have_voice)
+        self._trim_audio_buffer(conn)
 
         started_now = False
         if audio_have_voice and not self.is_processing and self.asr_ws is None:
@@ -75,6 +95,7 @@ class ASRProvider(ASRProviderBase):
         self.is_processing = True
         self.server_ready = False
         self.input_committed = False
+        self._commit_deadline = None
         self.text = ""
 
         self.asr_ws = await websockets.connect(
@@ -141,12 +162,28 @@ class ASRProvider(ASRProviderBase):
         if not self.asr_ws or not self.server_ready or self.input_committed:
             return
         self.input_committed = True
+        self._commit_deadline = (
+            asyncio.get_running_loop().time() + self.final_result_timeout
+        )
         await self.asr_ws.send(json.dumps(realtime_event("input_audio_buffer.commit")))
+
+    async def _recv_result_event(self):
+        if not self.input_committed or self._commit_deadline is None:
+            return await self.asr_ws.recv()
+        remaining = self._commit_deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            raise asyncio.TimeoutError
+        return await asyncio.wait_for(self.asr_ws.recv(), timeout=remaining)
+
+    def _trim_audio_buffer(self, conn):
+        total_bytes = sum(len(frame) for frame in conn.asr_audio)
+        while conn.asr_audio and total_bytes > self.max_buffer_bytes:
+            total_bytes -= len(conn.asr_audio.pop(0))
 
     async def _forward_results(self, conn):
         try:
             while not conn.stop_event.is_set() and self.asr_ws:
-                raw = await self.asr_ws.recv()
+                raw = await self._recv_result_event()
                 message = json.loads(raw)
                 event_type = message.get("type")
 
@@ -177,6 +214,10 @@ class ASRProvider(ASRProviderBase):
             raise
         except websockets.ConnectionClosed as exc:
             logger.bind(tag=TAG).warning(f"Qwen3 实时 ASR 连接已关闭: {exc}")
+        except asyncio.TimeoutError:
+            logger.bind(tag=TAG).error(
+                f"Qwen3 实时 ASR 等待最终文字超时: {self.final_result_timeout}s"
+            )
         except Exception as exc:
             logger.bind(tag=TAG).error(f"处理 Qwen3 实时 ASR 结果失败: {exc}")
         finally:
@@ -196,6 +237,7 @@ class ASRProvider(ASRProviderBase):
             self.is_processing = False
             self.server_ready = False
             self.input_committed = False
+            self._commit_deadline = None
 
             ws = self.asr_ws
             self.asr_ws = None

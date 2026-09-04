@@ -117,4 +117,16 @@
         WHERE id = #{agent.id}
     </update>
 
+    <delete id="deleteChildSafetyEventsByAgentId">
+        DELETE FROM ai_child_safety_event WHERE agent_id = #{agentId}
+    </delete>
+
+    <delete id="deleteChildSafetyReviewsByAgentId">
+        DELETE FROM ai_child_safety_review WHERE agent_id = #{agentId}
+    </delete>
+
+    <delete id="deleteChildSafetySettingByAgentId">
+        DELETE FROM ai_child_safety_setting WHERE agent_id = #{agentId}
+    </delete>
+
 </mapper>

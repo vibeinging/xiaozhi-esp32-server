@@ -98,7 +98,7 @@ public class AgentChatHistoryServiceImpl extends CrudRepository<AiAgentChatHisto
                 new LambdaQueryWrapper<AgentChatHistoryEntity>()
                         .select(AgentChatHistoryEntity::getCreatedAt)
                         .eq(AgentChatHistoryEntity::getAgentId, agentId)
-                        .orderByDesc(AgentChatHistoryEntity::getId)
+                        .orderByDesc(AgentChatHistoryEntity::getCreatedAt)
                         .last("LIMIT 1"));
         return entity == null ? null : entity.getCreatedAt();
     }
@@ -140,18 +140,37 @@ public class AgentChatHistoryServiceImpl extends CrudRepository<AiAgentChatHisto
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBefore(String agentId, Date cutoff) {
+        if (agentId == null || agentId.isBlank() || cutoff == null) {
+            return;
+        }
+        List<String> audioIds = baseMapper.selectList(
+                new QueryWrapper<AgentChatHistoryEntity>()
+                        .select("audio_id")
+                        .eq("agent_id", agentId)
+                        .lt("created_at", cutoff)).stream()
+                .map(AgentChatHistoryEntity::getAudioId)
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (CollUtil.isNotEmpty(audioIds)) {
+            ListUtil.split(audioIds, 1000).forEach(baseMapper::deleteAudioByIds);
+        }
+        baseMapper.delete(new QueryWrapper<AgentChatHistoryEntity>()
+                .eq("agent_id", agentId)
+                .lt("created_at", cutoff));
+    }
+
+    @Override
     public List<AgentChatHistoryUserVO> getRecentlyFiftyByAgentId(String agentId) {
-        // 构建查询条件(不添加按照创建时间排序，数据本来就是主键越大创建时间越大
-        // 不添加这样可以减少排序全部数据在分页的全盘扫描消耗)
+        // 延迟上报时自增 ID 与真实聊天时间可能不同，因此按创建时间排序。
         LambdaQueryWrapper<AgentChatHistoryEntity> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(AgentChatHistoryEntity::getContent, AgentChatHistoryEntity::getAudioId)
                 .eq(AgentChatHistoryEntity::getAgentId, agentId)
                 .eq(AgentChatHistoryEntity::getChatType, AgentChatHistoryType.USER.getValue())
                 .isNotNull(AgentChatHistoryEntity::getAudioId)
-                // 添加此行，确保查询结果按照创建时间降序排列
-                // 使用id的原因：数据形式，id越大的创建时间就越晚，所以使用id的结果和创建时间降序排列结果一样
-                // id作为降序排列的优势，性能高，有主键索引，不用在排序的时候重新进行排除扫描比较
-                .orderByDesc(AgentChatHistoryEntity::getId);
+                .orderByDesc(AgentChatHistoryEntity::getCreatedAt);
 
         // 构建分页查询，查询前50页数据
         Page<AgentChatHistoryEntity> pageParam = new Page<>(0, 50);
