@@ -119,6 +119,8 @@ class ConnectionHandler:
         self.client_is_speaking = False
         self.client_listen_mode = "auto"
         self.client_aec = False  # 是否启用了服务端AEC
+        # 标记本轮语音是否在玩偶播报期间开始，用于只允许唤醒词打断。
+        self.asr_started_while_speaking = False
 
         # 线程任务相关
         self.loop = None  # 在 handle_connection 中获取运行中的事件循环
