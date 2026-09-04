@@ -342,21 +342,51 @@
                         <div
                           v-if="
                             model.type === 'Memory' &&
-                            form.model.memModelId !== 'Memory_nomem'
+                            (form.model.memModelId !== 'Memory_nomem' || hasMemMeOption())
                           "
                           class="chat-history-options"
                         >
                           <el-radio-group
+                            v-if="form.model.memModelId !== 'Memory_nomem'"
                             v-model="form.chatHistoryConf"
                             @change="updateChatHistoryConf"
                           >
                             <el-radio-button :label="1">{{
                               $t("roleConfig.reportText")
                             }}</el-radio-button>
-                            <el-radio-button :label="2">{{
+                            <el-radio-button
+                              :label="2"
+                              :disabled="[
+                                'Memory_memme',
+                                'Memory_mem_report_only',
+                              ].includes(form.model.memModelId)"
+                            >{{
                               $t("roleConfig.reportTextVoice")
                             }}</el-radio-button>
                           </el-radio-group>
+                          <div
+                            v-if="hasMemMeOption()"
+                            class="memme-data-actions"
+                          >
+                            <span class="memme-data-hint">{{ $t("roleConfig.memmeDataHint") }}</span>
+                            <el-button
+                              size="mini"
+                              plain
+                              :loading="memmeExporting"
+                              @click="exportMemMeData"
+                            >
+                              {{ $t("roleConfig.exportMemMeData") }}
+                            </el-button>
+                            <el-button
+                              size="mini"
+                              type="danger"
+                              plain
+                              :loading="memmeDeleting"
+                              @click="deleteAllMemMeData"
+                            >
+                              {{ $t("roleConfig.deleteAllMemMeData") }}
+                            </el-button>
+                          </div>
                         </div>
                       </div>
                     </el-form-item>
@@ -506,6 +536,8 @@ export default {
       showContextProviderDialog: false,
       showTtsAdvancedDialog: false,
       showSnapshotDialog: false,
+      memmeExporting: false,
+      memmeDeleting: false,
       ttsSettings: {
         volume: 0,
         speed: 0,
@@ -1344,6 +1376,11 @@ export default {
     showFunctionIcons(type) {
       return type === "Intent" && this.form.model.intentModelId !== "Intent_nointent";
     },
+    hasMemMeOption() {
+      return (this.modelOptions.Memory || []).some(
+        (option) => option.value === "Memory_memme" && !option.isHidden
+      );
+    },
     handleModelChange(type, value) {
       if (type === "Intent" && value !== "Intent_nointent") {
         this.fetchAllFunctions().then((metadataReady) => {
@@ -1356,6 +1393,9 @@ export default {
         if (value === "Memory_nomem") {
           // 无记忆功能的模型，默认不记录聊天记录
           this.form.chatHistoryConf = 0;
+        } else if (["Memory_memme", "Memory_mem_report_only"].includes(value)) {
+          // 儿童记忆和安全复查只需要文字；默认不上传原始语音。
+          this.form.chatHistoryConf = 1;
         } else {
           // 有记忆功能的模型，默认记录文本和语音
           this.form.chatHistoryConf = 2;
@@ -1795,7 +1835,69 @@ export default {
     updateChatHistoryConf() {
       if (this.form.model.memModelId === "Memory_nomem") {
         this.form.chatHistoryConf = 0;
+      } else if (["Memory_memme", "Memory_mem_report_only"].includes(
+        this.form.model.memModelId
+      )) {
+        this.form.chatHistoryConf = 1;
       }
+    },
+    exportMemMeData() {
+      if (this.memmeExporting) return;
+      this.memmeExporting = true;
+      Api.memory.exportMemMeData(
+        (response) => {
+          try {
+            const blob = response.data instanceof Blob
+              ? response.data
+              : new Blob([response.data], { type: "application/json" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `memme-memory-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            this.$message.success(this.$t("roleConfig.exportMemMeSuccess"));
+          } finally {
+            this.memmeExporting = false;
+          }
+        },
+        (error) => {
+          this.memmeExporting = false;
+          this.$message.error(error?.data?.msg || this.$t("roleConfig.memmeOperationFailed"));
+        }
+      );
+    },
+    deleteAllMemMeData() {
+      if (this.memmeDeleting) return;
+      this.$prompt(
+        this.$t("roleConfig.deleteAllMemMePrompt"),
+        this.$t("roleConfig.deleteAllMemMeTitle"),
+        {
+          confirmButtonText: this.$t("button.ok"),
+          cancelButtonText: this.$t("button.cancel"),
+          inputPattern: /^DELETE-ALL-MEMORY$/,
+          inputErrorMessage: this.$t("roleConfig.deleteAllMemMeInputError"),
+          type: "warning",
+        }
+      ).then(() => {
+        this.memmeDeleting = true;
+        Api.memory.deleteAllMemMeData(
+          ({ data }) => {
+            this.memmeDeleting = false;
+            if (data?.code === 0) {
+              this.$message.success(this.$t("roleConfig.deleteAllMemMeSuccess"));
+            } else {
+              this.$message.error(data?.msg || this.$t("roleConfig.memmeOperationFailed"));
+            }
+          },
+          (error) => {
+            this.memmeDeleting = false;
+            this.$message.error(error?.data?.msg || this.$t("roleConfig.memmeOperationFailed"));
+          }
+        );
+      }).catch(() => {});
     },
     // 加载功能状态
     async loadFeatureStatus() {
@@ -2262,9 +2364,23 @@ export default {
 
 .chat-history-options {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   min-width: 250px;
   justify-content: flex-end;
+}
+
+.memme-data-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.memme-data-hint {
+  color: #909399;
+  font-size: 12px;
 }
 
 .chat-history-options ::v-deep .el-radio-button {

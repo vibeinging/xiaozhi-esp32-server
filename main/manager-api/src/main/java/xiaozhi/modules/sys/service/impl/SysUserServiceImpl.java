@@ -23,6 +23,7 @@ import xiaozhi.common.service.impl.BaseServiceImpl;
 import xiaozhi.common.utils.ConvertUtils;
 import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.device.service.DeviceService;
+import xiaozhi.modules.memory.service.MemMeDataService;
 import xiaozhi.modules.security.password.PasswordUtils;
 import xiaozhi.modules.sys.dao.SysUserDao;
 import xiaozhi.modules.sys.dto.AdminPageUserDTO;
@@ -47,6 +48,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserDao, SysUserEntit
     private final AgentService agentService;
 
     private final SysParamsService sysParamsService;
+
+    private final MemMeDataService memMeDataService;
 
     @Override
     public SysUserDTO getByUsername(String username) {
@@ -96,6 +99,11 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserDao, SysUserEntit
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteById(Long id) {
+        // 账号删除前先清理儿童长期记忆。即使用户后来切换了记忆模型，也不能遗漏旧数据。
+        // 未启用 MemMe 的普通部署保持原有删除流程；已启用时远端失败会中止本地删除。
+        if (memMeDataService.isConfigured()) {
+            memMeDataService.deleteUserData(id);
+        }
         // 删除用户
         baseDao.deleteById(id);
         // 删除设备

@@ -146,6 +146,7 @@ async def process_intent_result(
                 "name": function_name,
                 "id": str(uuid.uuid4().hex),
                 "arguments": function_args,
+                "_user_text": original_text,
             }
 
             await send_stt_message(conn, original_text)
@@ -231,6 +232,10 @@ async def process_intent_result(
 
 
 def speak_txt(conn: "ConnectionHandler", text):
+    if text is None:
+        return
+    text = conn.content_safety.guard_assistant_text(text)
+
     # 记录文本到 sentence_id 映射
     conn.tts.store_tts_text(conn.sentence_id, text)
 

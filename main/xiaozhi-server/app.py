@@ -46,6 +46,12 @@ async def monitor_stdin():
 async def main():
     check_ffmpeg_installed()
     config = await load_config()
+    from core.providers.memory.memme.memme import MemoryProvider
+
+    # 重试队列必须随进程启动恢复，不能等下一台设备结束会话才处理。
+    for memory_config in (config.get("Memory") or {}).values():
+        if isinstance(memory_config, dict) and memory_config.get("type") == "memme":
+            MemoryProvider(memory_config, worker_only=True).ensure_global_worker()
 
     # auth_key优先级：配置文件server.auth_key > manager-api.secret > 自动生成
     # auth_key用于jwt认证，比如视觉分析接口的jwt认证、ota接口的token生成与websocket认证
@@ -127,6 +133,7 @@ async def main():
     except asyncio.CancelledError:
         print("任务被取消，清理资源中...")
     finally:
+        await MemoryProvider.close_global_workers()
         # 停止全局GC管理器
         await gc_manager.stop()
 

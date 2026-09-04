@@ -6,6 +6,8 @@ if TYPE_CHECKING:
 
 TAG = __name__
 EMOJI_MAP = {
+    "🤩": "excited",
+    "⭐": "excited",
     "😂": "funny",
     "😭": "crying",
     "😠": "angry",
@@ -83,13 +85,10 @@ def is_punctuation_or_emoji(char):
 
 async def get_emotion(conn: "ConnectionHandler", text):
     """获取文本内的情绪消息"""
-    emoji = "🙂"
-    emotion = "happy"
-    for char in text:
-        if char in EMOJI_MAP:
-            emoji = char
-            emotion = EMOJI_MAP[char]
-            break
+    emoji, emotion = detect_emotion(text)
+    if emoji is None:
+        emoji = "😶"
+        emotion = "neutral"
     try:
         await conn.websocket.send(
             json.dumps(
@@ -104,6 +103,24 @@ async def get_emotion(conn: "ConnectionHandler", text):
     except Exception as e:
         conn.logger.bind(tag=TAG).warning(f"发送情绪表情失败，错误:{e}")
     return
+
+
+def detect_emotion(text):
+    """返回文本中第一个受支持的情绪标记，没有则返回 (None, None)。"""
+    if not text:
+        return None, None
+    for char in text:
+        if char in EMOJI_MAP:
+            return char, EMOJI_MAP[char]
+    return None, None
+
+
+def should_emit_emotion(text, final=False, max_prefix_length=256):
+    """流式回复要等到情绪标记真正到达，不能把第一个文字分片误判为中性。"""
+    if not text or not text.strip():
+        return False
+    emoji, _ = detect_emotion(text)
+    return emoji is not None or final or len(text) >= max_prefix_length
 
 
 def is_emoji(char):

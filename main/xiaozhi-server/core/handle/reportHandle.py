@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from core.connection import ConnectionHandler
 
 from config.manage_api_client import report as manage_report
+from core.safety import summarize_text_for_log
 
 TAG = __name__
 
@@ -182,7 +183,9 @@ def enqueue_tts_report(conn: "ConnectionHandler", text, opus_data):
                 f"TTS数据已加入上报队列: {conn.device_id}, 不上报音频"
             )
     except Exception as e:
-        conn.logger.bind(tag=TAG).error(f"加入TTS上报队列失败: {text}, {e}")
+        conn.logger.bind(tag=TAG).error(
+            f"加入TTS上报队列失败: {summarize_text_for_log(text)}, {e}"
+        )
 
 
 def enqueue_tool_report(conn: "ConnectionHandler", tool_name: str, tool_input: dict, tool_result: str = None, report_tool_call: bool = True):
@@ -237,16 +240,43 @@ def enqueue_asr_report(conn: "ConnectionHandler", text, opus_data):
     if conn.chat_history_conf == 0:
         return
     try:
+        report_text = _sanitize_child_report_text(conn, text)
+        child_mode = bool(getattr(getattr(conn, "content_safety", None), "enabled", False))
         # 使用连接对象的队列，传入文本和二进制数据而非文件路径
-        if conn.chat_history_conf == 2:
-            conn.report_queue.put((1, text, opus_data, int(time.time() * 1000)))
+        # 儿童模式即使配置被误改为2，也不上传原始音频。
+        if conn.chat_history_conf == 2 and not child_mode:
+            conn.report_queue.put((1, report_text, opus_data, int(time.time() * 1000)))
             conn.logger.bind(tag=TAG).debug(
                 f"ASR数据已加入上报队列: {conn.device_id}, 音频大小: {len(opus_data)} "
             )
         else:
-            conn.report_queue.put((1, text, None, int(time.time() * 1000)))
+            conn.report_queue.put((1, report_text, None, int(time.time() * 1000)))
             conn.logger.bind(tag=TAG).debug(
                 f"ASR数据已加入上报队列: {conn.device_id}, 不上报音频"
             )
     except Exception as e:
-        conn.logger.bind(tag=TAG).debug(f"加入ASR上报队列失败: {text}, {e}")
+        conn.logger.bind(tag=TAG).debug(
+            f"加入ASR上报队列失败: {summarize_text_for_log(text)}, {e}"
+        )
+
+
+def _sanitize_child_report_text(conn: "ConnectionHandler", text):
+    """儿童模式上报前脱敏；高确定性风险只保留分类，不保留原话。"""
+
+    policy = getattr(conn, "content_safety", None)
+    if policy is None or not getattr(policy, "enabled", False):
+        return text
+
+    safety_text = text
+    try:
+        if isinstance(text, str) and text.strip().startswith("{"):
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and "content" in parsed:
+                safety_text = parsed.get("content", "")
+    except (TypeError, json.JSONDecodeError):
+        safety_text = text
+
+    decision = policy.evaluate_input(safety_text)
+    if not decision.allowed:
+        return f"[儿童安全事件：{decision.category}，原文未保留]"
+    return policy.redact_private_text(text)

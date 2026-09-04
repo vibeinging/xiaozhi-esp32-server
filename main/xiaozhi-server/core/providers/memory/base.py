@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from config.logger import setup_logging
+from loguru import logger
 
 TAG = __name__
-logger = setup_logging()
+__all__ = ["MemoryProviderBase", "logger"]
 
 
 class MemoryProviderBase(ABC):

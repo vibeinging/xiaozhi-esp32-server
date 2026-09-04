@@ -1,6 +1,7 @@
 package xiaozhi.modules.agent.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -86,6 +87,20 @@ public class AgentChatHistoryServiceImpl extends CrudRepository<AiAgentChatHisto
 
         // 转换为DTO
         return ConvertUtils.sourceToTarget(historyList, AgentChatHistoryDTO.class);
+    }
+
+    @Override
+    public Date getLatestChatTimeByAgentId(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return null;
+        }
+        AgentChatHistoryEntity entity = baseMapper.selectOne(
+                new LambdaQueryWrapper<AgentChatHistoryEntity>()
+                        .select(AgentChatHistoryEntity::getCreatedAt)
+                        .eq(AgentChatHistoryEntity::getAgentId, agentId)
+                        .orderByDesc(AgentChatHistoryEntity::getId)
+                        .last("LIMIT 1"));
+        return entity == null ? null : entity.getCreatedAt();
     }
 
     @Override

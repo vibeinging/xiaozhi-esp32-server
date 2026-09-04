@@ -1,7 +1,7 @@
 <template>
   <div class="copyright">
     <div class="footer-content">
-      <span>{{ year }} {{ name }} {{ version }}</span>
+      <span class="footer-brand"><strong>YIYI AI</strong><small>CONSOLE</small><em>v{{ version }}</em></span>
       <template v-if="beianGaNum !== 'null'">
         <span v-if="beianIcpNum !== 'null' || name">|</span>
         <a :href="'http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=' + beianGaNum" target="_blank"
@@ -52,6 +52,31 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 5px;
+  color: #8b7d78;
+  font-size: 11px;
+}
+
+.footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.footer-brand strong {
+  color: #5e514d;
+  font-weight: 650;
+}
+
+.footer-brand small {
+  color: #b06a59;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.footer-brand em {
+  color: #9d918c;
+  font-style: normal;
 }
 
 .beian-link {

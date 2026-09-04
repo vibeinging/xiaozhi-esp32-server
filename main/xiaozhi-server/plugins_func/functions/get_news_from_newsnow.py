@@ -1,7 +1,6 @@
 import random
 import httpx
-from io import BytesIO
-from markitdown import MarkItDown, StreamInfo
+from bs4 import BeautifulSoup
 from config.logger import setup_logging
 from plugins_func.register import register_function, ToolType, ActionResponse, Action
 from typing import TYPE_CHECKING
@@ -137,25 +136,16 @@ async def fetch_news_from_api(conn: "ConnectionHandler", source="thepaper"):
 
 
 async def fetch_news_detail(url):
-    """获取新闻详情页内容并使用MarkItDown清理HTML"""
+    """获取新闻详情页内容并清理HTML"""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0)) as client:
             response = await client.get(url, headers=headers)
 
-        # 使用MarkItDown清理HTML内容
-        md = MarkItDown(enable_plugins=False)
-        result = md.convert_stream(
-            BytesIO(response.content),
-            stream_info=StreamInfo(
-                mimetype="text/html",
-                extension=".html",
-                charset=response.encoding or "utf-8",
-            ),
-        )
-
-        # 获取清理后的文本内容
-        clean_text = result.text_content
+        soup = BeautifulSoup(response.text, "html.parser")
+        for node in soup(["script", "style", "noscript", "svg"]):
+            node.decompose()
+        clean_text = soup.get_text(separator="\n", strip=True)
 
         # 如果清理后的内容为空，返回提示信息
         if not clean_text or len(clean_text.strip()) == 0:

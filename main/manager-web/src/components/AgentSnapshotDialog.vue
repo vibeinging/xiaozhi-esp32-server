@@ -537,6 +537,7 @@ const FALLBACK_MODEL_NAME_KEYS = {
   Memory_nomem: "agentSnapshot.model.Memory_nomem",
   Memory_mem_local_short: "agentSnapshot.model.Memory_mem_local_short",
   Memory_mem0ai: "agentSnapshot.model.Memory_mem0ai",
+  Memory_memme: "agentSnapshot.model.Memory_memme",
   Memory_mem_report_only: "agentSnapshot.model.Memory_mem_report_only",
   Intent_nointent: "agentSnapshot.model.Intent_nointent",
   Intent_intent_llm: "agentSnapshot.model.Intent_intent_llm",

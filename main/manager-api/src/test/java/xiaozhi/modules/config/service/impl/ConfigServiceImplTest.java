@@ -69,6 +69,31 @@ class ConfigServiceImplTest {
         assertEquals(List.of("first", "second"), features.get("labels"));
     }
 
+    @Test
+    void memMeScopeUsesStableAccountAndAgentIdsInsteadOfConfiguredOrDeviceIds() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("type", "memme");
+        config.put("user_id", "must-not-survive");
+        config.put("agent_id", "must-not-survive");
+
+        ConfigServiceImpl.applyMemMeScope(config, 42L, "pet-7");
+
+        assertEquals("xiaozhi-user-42", config.get("user_id"));
+        assertEquals("xiaozhi-agent-pet-7", config.get("agent_id"));
+    }
+
+    @Test
+    void memMeScopeFailsClosedWhenStableIdentityIsUnavailable() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("user_id", "configured-user");
+        config.put("agent_id", "configured-agent");
+
+        ConfigServiceImpl.applyMemMeScope(config, null, "");
+
+        assertEquals(false, config.containsKey("user_id"));
+        assertEquals(false, config.containsKey("agent_id"));
+    }
+
     private static SysParamsDTO parameter(String code, String value, String type) {
         SysParamsDTO parameter = new SysParamsDTO();
         parameter.setParamCode(code);

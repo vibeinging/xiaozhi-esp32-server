@@ -113,7 +113,7 @@ wakeup_words:
   - "你好小新"
   - "小美同学"
   - "小龙小龙"
-  - "喵喵同学"
+  - "小布布"
   - "小滨小滨"
   - "小冰小冰"
 # MCP接入点地址，地址格式为：ws://你的mcp接入点ip或者域名:端口号/mcp/?token=你的token
@@ -343,6 +343,31 @@ Memory:
       #   db_name: powermem
       #   collection_name: memories  # 默认表名，如创建维度错误请删除此表或更改名称
       #   embedding_model_dims: 1024  # 嵌入向量维度，注意跟使用模型适配，以智普为例：embedding-2的维度是1024，embedding-3的维度是2048
+  memme:
+    # 本地 MemMe 长期记忆。启用时把 selected_module.Memory 改为 memme。
+    type: memme
+    base_url: http://127.0.0.1:8080
+    # 建议通过 MEMME_API_KEY 环境变量传入，不要把真实 Key 写进配置文件。
+    api_key: ${MEMME_API_KEY}
+    # 必填的稳定身份。不能使用设备 MAC 或一次 WebSocket 会话 ID。
+    user_id: ""
+    agent_id: ""
+    app_id: xiaozhi
+    queue_path: data/memme-retry.sqlite3
+    request_timeout_seconds: 3
+    retry_batch_size: 2
+    retry_poll_seconds: 1
+    retry_base_seconds: 10
+    retry_max_seconds: 3600
+    queue_max_jobs: 10000
+    queue_max_bytes: 268435456
+    dead_letter_max_jobs: 1000
+    recall_limit: 5
+    recall_max_chars: 4000
+    # 没有给 MemMe 配置 LLM 时保持 false；原始事件仍可立即召回。
+    compact_on_save: false
+    # 默认不向记忆库传设备 MAC。
+    include_device_id: false
   nomem:
     # 不想使用记忆功能，可以使用nomem
     type: nomem
@@ -556,6 +581,16 @@ ASR:
     enable_itn: true  # 逆文本归一化
     #language: "zh"  # 语种，支持zh、en、ja、ko等
     context: ""  # 上下文信息，用于提高识别准确率，不超过10000 Token
+  Qwen3ASRRealtime:
+    # 通义千问 Qwen3-ASR-Flash-Realtime 实时语音识别。
+    # 专属业务空间可直接填它的 OpenAI 兼容 base_url，程序会自动换成同域 WebSocket 地址。
+    type: qwen3_asr_realtime
+    api_key: 你的阿里云百炼API密钥
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen3-asr-flash-realtime-2026-02-10
+    sample_rate: 16000
+    language: zh
+    output_dir: tmp/
   XunfeiStreamASR:
     # 讯飞流式语音识别服务
     # 需要先在讯飞开放平台创建应用，获取以下认证信息
@@ -1148,6 +1183,21 @@ TTS:
     # rate: 1  # 语速：0.5~2
     # pitch: 1  # 语调：0.5~2
     # language: "中文"  # 指定输出语种,如:中文、英语、日语、韩语等,请根据所选音色支持的语言进行设置,不填则默认为中文
+  Qwen3TTSRealtime:
+    # 通义千问 Qwen3-TTS-Flash-Realtime。PCM 到达服务端后会立即转成设备 Opus。
+    type: qwen3_tts_realtime
+    api_key: 你的阿里云百炼API密钥
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen3-tts-flash-realtime
+    voice: Serena
+    language_type: Chinese
+    volume: 50
+    speech_rate: 1.0
+    pitch_rate: 1.0
+    cat_meow_enabled: true
+    cat_meow_probability: 0.5
+    max_segment_chars: 18
+    output_dir: tmp/
   XunFeiTTS:
     # 讯飞TTS服务 官方网站：https://www.xfyun.cn/
     # 登录讯飞语音技术平台 https://console.xfyun.cn/app/myapp 创建相关应用

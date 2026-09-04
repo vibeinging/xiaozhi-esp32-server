@@ -1,6 +1,10 @@
+import asyncio
+import base64
+import mimetypes
 import os
 from typing import Optional, Tuple, List
 import dashscope
+import openai
 from config.logger import setup_logging
 from core.providers.asr.base import ASRProviderBase
 from core.providers.asr.dto.dto import InterfaceType
@@ -22,8 +26,15 @@ class ASRProvider(ASRProviderBase):
             raise ValueError("Qwen3-ASR-Flash 需要配置 api_key")
             
         self.model_name = config.get("model_name", "qwen3-asr-flash")
+        self.base_url = config.get("base_url")
         self.output_dir = config.get("output_dir", "./audio_output")
         self.delete_audio_file = delete_audio_file
+        self.openai_client = None
+        if self.base_url:
+            self.openai_client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
         
         # ASR选项配置
         self.enable_lid = config.get("enable_lid", True)  # 自动语种检测
@@ -53,6 +64,13 @@ class ASRProvider(ASRProviderBase):
             file_path = artifacts.file_path
             if not temp_file_path:
                 return "", file_path
+
+            if self.openai_client:
+                full_text = await asyncio.to_thread(
+                    self._speech_to_text_openai, temp_file_path
+                )
+                return full_text, file_path
+
             # 构造请求消息
             messages = [
                 {
@@ -109,3 +127,46 @@ class ASRProvider(ASRProviderBase):
         except Exception as e:
             logger.bind(tag=tag).error(f"语音识别失败: {e}")
             return "", file_path
+
+    def _speech_to_text_openai(self, audio_path: str) -> str:
+        """通过百炼业务空间的 OpenAI 兼容接口识别音频。"""
+        mime_type = mimetypes.guess_type(audio_path)[0] or "audio/wav"
+        with open(audio_path, "rb") as audio_file:
+            audio_base64 = base64.b64encode(audio_file.read()).decode("ascii")
+        audio_data_uri = f"data:{mime_type};base64,{audio_base64}"
+
+        messages = []
+        if self.context:
+            messages.append({"role": "system", "content": self.context})
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": audio_data_uri},
+                    }
+                ],
+            }
+        )
+
+        asr_options = {"enable_itn": self.enable_itn}
+        if self.language:
+            asr_options["language"] = self.language
+
+        response = self.openai_client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            stream=False,
+            extra_body={"asr_options": asr_options},
+        )
+        content = response.choices[0].message.content
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            return "".join(
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict)
+            ).strip()
+        return str(content or "").strip()

@@ -20,6 +20,7 @@ import xiaozhi.modules.agent.service.AgentChatHistoryService;
 import xiaozhi.modules.agent.service.AgentChatSummaryService;
 import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.agent.service.biz.AgentChatHistoryBizService;
+import xiaozhi.modules.childsafety.service.ChildSafetyReviewService;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
 
@@ -40,6 +41,7 @@ public class AgentChatHistoryBizServiceImpl implements AgentChatHistoryBizServic
     private final AgentChatSummaryService agentChatSummaryService;
     private final RedisUtils redisUtils;
     private final DeviceService deviceService;
+    private final ChildSafetyReviewService childSafetyReviewService;
 
     /**
      * 处理聊天记录上报，包括文件上传和相关信息记录
@@ -66,10 +68,10 @@ public class AgentChatHistoryBizServiceImpl implements AgentChatHistoryBizServic
         String agentId = agentEntity.getId();
 
         if (Objects.equals(chatHistoryConf, Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode())) {
-            saveChatText(report, agentId, macAddress, null, reportTimeMillis);
+            saveChatText(report, agentEntity, macAddress, null, reportTimeMillis);
         } else if (Objects.equals(chatHistoryConf, Constant.ChatHistoryConfEnum.RECORD_TEXT_AUDIO.getCode())) {
             String audioId = saveChatAudio(report);
-            saveChatText(report, agentId, macAddress, audioId, reportTimeMillis);
+            saveChatText(report, agentEntity, macAddress, audioId, reportTimeMillis);
         }
 
         // 更新设备最后对话时间
@@ -108,8 +110,9 @@ public class AgentChatHistoryBizServiceImpl implements AgentChatHistoryBizServic
     /**
      * 组装上报数据
      */
-    private void saveChatText(AgentChatHistoryReportDTO report, String agentId, String macAddress, String audioId,
+    private void saveChatText(AgentChatHistoryReportDTO report, AgentEntity agent, String macAddress, String audioId,
             Long reportTime) {
+        String agentId = agent.getId();
         // 构建聊天记录实体
         AgentChatHistoryEntity entity = AgentChatHistoryEntity.builder()
                 .macAddress(macAddress)
@@ -124,6 +127,7 @@ public class AgentChatHistoryBizServiceImpl implements AgentChatHistoryBizServic
 
         // 保存数据
         agentChatHistoryService.save(entity);
+        childSafetyReviewService.captureImmediateEvent(agent, entity);
 
         log.info("设备 {} 对应智能体 {} 上报成功", macAddress, agentId);
     }
